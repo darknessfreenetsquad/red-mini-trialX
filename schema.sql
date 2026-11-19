@@ -28,3 +28,9 @@ alter table public.numbers enable row level security;
 alter table public.configs enable row level security;
 alter table public.admins enable row level security;
 alter table public.newsletters enable row level security;
+
+-- The app uses a server-only secret key, which maps to service_role.
+-- Do not grant these tables to anon or authenticated clients.
+grant select, insert, update, delete on table
+  public.sessions, public.numbers, public.configs, public.admins, public.newsletters
+  to service_role;

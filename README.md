@@ -12,8 +12,8 @@ Red Mini is an Express dashboard and WhatsApp bot. The frontend and API run on t
 ## Setup
 
 1. Run `npm ci`.
-2. Run [`schema.sql`](schema.sql) in your Supabase SQL editor. The tables have row-level security enabled; do not add public access policies for session credentials. The server requires a service-role key, which must remain secret.
-3. Copy `.env.example` to `.env` and edit it. Set `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and a strong random `DASHBOARD_TOKEN`. The token is required for pairing and reconnecting, and must be shared only with trusted administrators. To generate one, run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+2. Run [`schema.sql`](schema.sql) in your Supabase SQL editor. The tables have row-level security enabled and the schema grants access only to the server role; do not add public policies for session credentials.
+3. In Supabase, open **Settings → API Keys** and create/copy a server-only secret key beginning with `sb_secret_`. Copy `.env.example` to `.env` and set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, and a strong random `DASHBOARD_TOKEN`. The app still accepts the legacy `SUPABASE_SERVICE_ROLE_KEY` if your project has not created a secret key yet. The Supabase key must remain server-only. The dashboard token is required for pairing and reconnecting and must be shared only with trusted administrators. To generate one, run `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 4. Optionally set `OWNER_NUMBER` to an international phone number with digits only. Without it, instance-wide owner commands are disabled; the linked number still controls its own session. Set `OPENWEATHER_API_KEY` if using weather.
 5. Start locally with `node --env-file=.env index.js`, or configure those environment variables in your hosting provider and run `npm start`. Visit `http://localhost:8002/status` (or the provider's HTTPS address). The application does not automatically load `.env` when using `npm start`.
 
