@@ -255,12 +255,16 @@ ${FOOTER}`;
           { buttonId: `${prefix}weather`, buttonText: { displayText: '🌤️ WEATHER' }, type: 1 }
         ];
 
-        await socket.sendMessage(from, {
-          image: { url: BOT_IMAGE },
-          caption: menuText,
-          buttons: buttons,
-          headerType: 4
-        }, { quoted: msg });
+        try {
+          await socket.sendMessage(from, {
+            text: menuText,
+            footer: FOOTER,
+            buttons
+          }, { quoted: msg });
+        } catch (buttonError) {
+          console.error('Menu buttons failed; sending text fallback:', buttonError.message);
+          await socket.sendMessage(from, { text: menuText }, { quoted: msg });
+        }
         return;
       }
 

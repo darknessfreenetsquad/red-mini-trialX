@@ -89,6 +89,14 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   assert.equal((await (await request('/api/status')).json()).activeSessions, 0);
 
   const socket = sockets[0];
+  socket.ev.emit('messages.upsert', {
+    messages: [{ key: { remoteJid: '27634988678@s.whatsapp.net', fromMe: true }, message: { conversation: '.menu' } }]
+  });
+  await until(() => socket.sent.some(item => item.message.buttons?.length === 5));
+  const menuMessage = socket.sent.find(item => item.message.buttons?.length === 5).message;
+  assert.match(menuMessage.text, /RED MINI BOT/);
+  assert.equal(menuMessage.buttons[0].buttonId, '.alive');
+
   socket.options.auth.creds.registered = true;
   socket.ev.emit('creds.update');
   await socket.options.auth.keys.set({ session: { device1: { value: Buffer.from('secret-key') } } });
