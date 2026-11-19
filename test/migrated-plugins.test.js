@@ -15,7 +15,7 @@ function ctx(command, args = []) {
   return {
     socket: { sent: [], async sendMessage(to, message) { this.sent.push(message); } },
     from: '12345678901@s.whatsapp.net', msg: { key: { remoteJid: '12345678901@s.whatsapp.net' } },
-    command, args, footer: '© Red Dragon DFS'
+    command, args, prefix: '.', footer: '© Red Dragon DFS', botName: 'Red Mini', ownerNumber: 'Not configured', getUptime: () => 12
   };
 }
 
@@ -32,6 +32,15 @@ test('games use compact RedDragon formatting and validate rps', async () => {
   assert.match(truth.socket.sent[0].text, /RED DRAGON DFS/);
   const rps = ctx('rps', ['invalid']); await games.run(rps);
   assert.match(rps.socket.sent[0].text, /Choose: rock/);
+});
+
+test('every registered plugin command alias has a safe local smoke path', async () => {
+  const registry = loadPlugins();
+  for (const command of registry.keys()) {
+    const commandContext = ctx(command);
+    await registry.get(command).run(commandContext);
+    assert.ok(commandContext.socket.sent.length > 0, `${command} produced no response`);
+  }
 });
 
 test('social and universal downloader plugins validate URLs and send API media', async () => {

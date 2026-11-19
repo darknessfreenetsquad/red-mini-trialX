@@ -63,7 +63,7 @@ async function sendSearchButtons(ctx, result) {
 }
 
 module.exports = {
-  commands: ['play', 'playaudio', 'playdoc', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'ytmpdoc'],
+  commands: ['play', 'playaudio', 'playdoc', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'ytmpdoc', 'play3', 'song2'],
   searchYouTube,
   async run(ctx) {
     const { socket, from, msg, command, args, prefix, footer } = ctx;
@@ -109,7 +109,7 @@ module.exports = {
           caption: redDragon('YOUTUBE VIDEO', [title], footer),
           mimetype: 'video/mp4'
         }, { quoted: msg });
-      } else if (command === 'playdoc') {
+      } else if (command === 'playdoc' || command === 'ytmpdoc') {
         await socket.sendMessage(from, {
           document: { url: downloadUrl },
           mimetype: 'audio/mpeg',

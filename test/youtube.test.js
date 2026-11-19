@@ -67,3 +67,18 @@ test('.video searches the official API and sends a video response', async () => 
   assert.equal(message.video.url, 'https://cdn.test/video.mp4');
   assert.equal(message.mimetype, 'video/mp4');
 });
+
+test('play3 and song2 search YouTube and send audio; ytmpdoc sends a document', async () => {
+  process.env.YOUTUBE_API_KEY = 'test-key';
+  axios.get = async (url, options) => url.includes('googleapis')
+    ? { data: { items: [{ id: { videoId: 'music123' }, snippet: { title: 'Music', channelTitle: 'Artist', thumbnails: {} } }] } }
+    : { data: { result: { downloadUrl: 'https://cdn.test/music.mp3' } } };
+  for (const command of ['play3', 'song2']) {
+    const ctx = context(command);
+    await plugin.run(ctx);
+    assert.equal(ctx.socket.sent.at(-1).message.audio.url, 'https://cdn.test/music.mp3');
+  }
+  const doc = context('ytmpdoc', ['https://youtu.be/music123']);
+  await plugin.run(doc);
+  assert.equal(doc.socket.sent.at(-1).message.document.url, 'https://cdn.test/music.mp3');
+});
