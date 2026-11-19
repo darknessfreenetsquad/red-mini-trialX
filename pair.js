@@ -5,6 +5,8 @@ const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const runFile = promisify(execFile);
+const { loadPlugins } = require('./plugin-loader');
+const commandPlugins = loadPlugins();
 const router = express.Router();
 const pino = require('pino');
 const moment = require('moment-timezone');
@@ -190,6 +192,26 @@ function setupCommandHandlers(socket, sessionNumber) {
       const mode = userConfig.WORK_TYPE || 'public';
       const isOwner = senderNumber === sessionNumber || (OWNER_NUMBER && senderNumber === OWNER_NUMBER);
       if (!isOwner && (mode === 'private' || (mode === 'groups' && !isGroup) || (mode === 'inbox' && isGroup))) return;
+      const plugin = commandPlugins.get(command);
+      if (plugin) {
+        await plugin.run({
+          socket,
+          msg,
+          from,
+          command,
+          args,
+          sender,
+          senderNumber,
+          sessionNumber,
+          isGroup,
+          prefix,
+          footer: FOOTER,
+          ownerNumber: OWNER_NUMBER,
+          botName: BOT_NAME,
+          getUptime: () => Math.floor((Date.now() - (socketCreationTime.get(sessionNumber) || Date.now())) / 1000)
+        });
+        return;
+      }
       // ==================== MENU COMMAND WITH BUTTONS ====================
       if (command === 'menu') {
         await socket.sendMessage(from, { react: { text: '🔴', key: msg.key } });
