@@ -79,6 +79,11 @@ async function until(condition) {
   throw new Error('Timed out waiting for mocked async event');
 }
 
+test('connection-close errors are classified as transient', () => {
+  assert.equal(pair.isTransientConnectionError({ output: { statusCode: 428 }, message: 'Connection Closed' }), true);
+  assert.equal(pair.isTransientConnectionError(new Error('permission denied')), false);
+});
+
 test('pairing registers handlers, persists credentials and keys, tracks active sockets, and restores sessions', async () => {
   const [first, second] = await Promise.all([postCode(), postCode()]);
   assert.equal(first.status, 200);

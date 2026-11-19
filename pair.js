@@ -122,6 +122,27 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
+function isTransientConnectionError(error) {
+  const statusCode = error?.output?.statusCode || error?.data?.statusCode;
+  const message = String(error?.message || error || '').toLowerCase();
+  return statusCode === 428 || message.includes('connection closed') || message.includes('connection is closed');
+}
+
+function guardSocketSender(socket, number) {
+  const sendMessage = socket.sendMessage.bind(socket);
+  socket.sendMessage = async (...args) => {
+    try {
+      return await sendMessage(...args);
+    } catch (error) {
+      if (isTransientConnectionError(error)) {
+        console.warn(`Skipped message for ${number}: WhatsApp connection is closing`);
+        return null;
+      }
+      throw error;
+    }
+  };
+}
+
 async function downloadQuotedMedia(quoted) {
   if (!quoted) return null;
   const qTypes = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'];
@@ -993,6 +1014,7 @@ async function EmpirePair(number, requestCode = false) {
       logger,
       browser: ['Ubuntu', 'Chrome', '20.0.04']
     });
+    guardSocketSender(socket, number);
     const entry = { socket, code: null, timer: null, opening: Promise.resolve() };
     authStores.set(socket, { ...authStore, waitOpen: () => entry.opening });
     if (!state.creds.registered) {
@@ -1182,3 +1204,4 @@ module.exports = router;
 module.exports.getActiveSessions = getActiveSessions;
 module.exports.checkDatabase = checkDatabase;
 module.exports.startSavedSessions = startSavedSessions;
+module.exports.isTransientConnectionError = isTransientConnectionError;
