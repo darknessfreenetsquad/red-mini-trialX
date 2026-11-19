@@ -83,6 +83,16 @@ test('connection-close errors are classified as transient', () => {
   assert.equal(pair.isTransientConnectionError(new Error('permission denied')), false);
 });
 
+test('owner recognition uses Baileys alternate phone JIDs when WhatsApp sends a LID', () => {
+  const key = {
+    remoteJid: '1847362910@lid',
+    remoteJidAlt: '27634988678@s.whatsapp.net'
+  };
+  assert.deepEqual(pair.getMessageIdentityNumbers(key, { user: { id: 'bot@s.whatsapp.net' } }), ['1847362910', '27634988678']);
+  assert.equal(pair.isOwnerMessage(key, { user: { id: 'bot@s.whatsapp.net' } }, '12345678901'), true);
+  assert.equal(pair.isOwnerMessage({ remoteJid: '1847362910@lid' }, { user: { id: 'bot@s.whatsapp.net' } }, '12345678901'), false);
+});
+
 test('pairing registers handlers, persists credentials and keys, tracks active sockets, and restores sessions', async () => {
   const [first, second] = await Promise.all([postCode(), postCode()]);
   assert.equal(first.status, 200);

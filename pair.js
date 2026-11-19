@@ -211,6 +211,32 @@ function unwrapMessageContent(message) {
   return content;
 }
 
+function phoneNumberFromJid(jid) {
+  if (typeof jid !== 'string') return null;
+  const value = jid.split('@')[0].split(':')[0].replace(/\D/g, '');
+  return /^\d{10,15}$/.test(value) ? value : null;
+}
+
+function getMessageIdentityNumbers(key, socket) {
+  const candidates = new Set();
+  const add = value => {
+    const number = phoneNumberFromJid(value);
+    if (number) candidates.add(number);
+  };
+  if (key?.fromMe) add(socket?.user?.id);
+  add(key?.participant);
+  add(key?.remoteJid);
+  // WhatsApp LID messages can expose the phone JID in one of these alternate fields.
+  for (const field of ['participantAlt', 'remoteJidAlt', 'senderPn', 'participantPn', 'senderAlt']) add(key?.[field]);
+  return [...candidates];
+}
+
+function isOwnerMessage(key, socket, sessionNumber) {
+  if (key?.fromMe) return true;
+  const identities = getMessageIdentityNumbers(key, socket);
+  return identities.includes(sessionNumber) || Boolean(OWNER_NUMBER && identities.includes(OWNER_NUMBER));
+}
+
 function setupCommandHandlers(socket, sessionNumber) {
   socket.ev.on('messages.upsert', async ({ messages }) => {
     for (const msg of messages || []) {
@@ -231,7 +257,8 @@ function setupCommandHandlers(socket, sessionNumber) {
 
     const from = msg.key.remoteJid;
     const sender = msg.key.fromMe ? socket.user.id.split(':')[0] + '@s.whatsapp.net' : (msg.key.participant || msg.key.remoteJid);
-    const senderNumber = sender.split('@')[0].split(':')[0];
+    const identityNumbers = getMessageIdentityNumbers(msg.key, socket);
+    const senderNumber = identityNumbers[0] || phoneNumberFromJid(sender) || sender.split('@')[0].split(':')[0];
     const isGroup = from.endsWith('@g.us');
     const prefix = config.PREFIX;
     const isCmd = body.startsWith(prefix);
@@ -244,7 +271,7 @@ function setupCommandHandlers(socket, sessionNumber) {
     try {
       const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
       const mode = userConfig.WORK_TYPE || 'public';
-      const isOwner = senderNumber === sessionNumber || (OWNER_NUMBER && senderNumber === OWNER_NUMBER);
+      const isOwner = isOwnerMessage(msg.key, socket, sessionNumber);
       if (!isOwner && (mode === 'private' || (mode === 'groups' && !isGroup) || (mode === 'inbox' && isGroup))) return;
       const plugin = commandPlugins.get(command);
       if (plugin) {
@@ -714,7 +741,7 @@ ${FOOTER}`;
 
         try {
           const cleanNumber = number.replace(/[^0-9]/g, '');
-          if (senderNumber !== sessionNumber && senderNumber !== OWNER_NUMBER) throw new Error('Permission denied');
+          if (!isOwner) throw new Error('Permission denied');
           const result = await EmpirePair(cleanNumber, true);
           const code = result.code;
           if (!code) throw new Error('Pairing code unavailable');
@@ -792,7 +819,7 @@ ${FOOTER}`;
 
       // ==================== WORK TYPE COMMAND ====================
       if (command === 'wtype') {
-        if (senderNumber !== sessionNumber && senderNumber !== OWNER_NUMBER) {
+        if (!isOwner) {
           await socket.sendMessage(from, { text: '❌ Permission denied' }, { quoted: msg });
           return;
         }
@@ -848,7 +875,7 @@ ${FOOTER}`;
       // ==================== DELETE SESSION ====================
       if (command === 'deleteme') {
         const senderNum = senderNumber;
-        if (senderNum !== sessionNumber && senderNum !== OWNER_NUMBER) {
+        if (!isOwner) {
           await socket.sendMessage(from, { text: '❌ Permission denied' }, { quoted: msg });
           return;
         }
@@ -869,7 +896,7 @@ ${FOOTER}`;
 
       // ==================== BROADCAST COMMAND ====================
       if (command === 'broadcast') {
-        if (senderNumber !== OWNER_NUMBER) {
+        if (!isOwner) {
           await socket.sendMessage(from, { text: '❌ Owner only command' }, { quoted: msg });
           return;
         }
@@ -894,7 +921,7 @@ ${FOOTER}`;
 
       // ==================== ADMIN COMMANDS ====================
       if (command === 'admin') {
-        if (senderNumber !== OWNER_NUMBER) {
+        if (!isOwner) {
           await socket.sendMessage(from, { text: '❌ Owner only command' }, { quoted: msg });
           return;
         }
@@ -919,7 +946,7 @@ ${FOOTER}`;
 
       // ==================== NEWSLETTER COMMANDS ====================
       if (command === 'newsletter') {
-        if (senderNumber !== OWNER_NUMBER) {
+        if (!isOwner) {
           await socket.sendMessage(from, { text: '❌ Owner only command' }, { quoted: msg });
           return;
         }
@@ -1231,3 +1258,5 @@ module.exports.getActiveSessions = getActiveSessions;
 module.exports.checkDatabase = checkDatabase;
 module.exports.startSavedSessions = startSavedSessions;
 module.exports.isTransientConnectionError = isTransientConnectionError;
+module.exports.getMessageIdentityNumbers = getMessageIdentityNumbers;
+module.exports.isOwnerMessage = isOwnerMessage;
