@@ -592,40 +592,38 @@
         async function refreshData() {
             try {
                 addLog('info', 'Fetching bot status...');
-                
-                const pingRes = await fetch('/ping');
-                const pingData = await pingRes.json();
-                
-                if (pingData.status === 'active') {
+
+                const response = await fetch('/api/status', { headers: { 'Accept': 'application/json' } });
+                if (!response.ok) throw new Error(`Status request failed (${response.status})`);
+                const data = await response.json();
+
+                if (data.status === 'online') {
                     document.getElementById('botStatusValue').innerHTML = '<span style="color:#00ff00;"><i class="fas fa-circle"></i> ONLINE</span>';
-                    document.getElementById('dbStatus').innerHTML = '<span style="color:#00ff00;">Connected</span>';
+                    const databaseLabel = data.databaseConfigured ? 'Connected' : 'Not configured';
+                    const databaseColor = data.databaseConfigured ? '#00ff00' : '#ffaa00';
+                    document.getElementById('dbStatus').innerHTML = `<span style="color:${databaseColor};">${databaseLabel}</span>`;
                     addLog('success', 'Bot is online and responding');
                 } else {
                     document.getElementById('botStatusValue').innerHTML = '<span style="color:#ff0000;"><i class="fas fa-circle"></i> OFFLINE</span>';
                     addLog('warn', 'Bot status degraded');
                 }
 
-                const activeRes = await fetch('/active');
-                const activeData = await activeRes.json();
-                
-                document.getElementById('sessionCount').innerHTML = activeData.count || 0;
-                
                 const sessionsList = document.getElementById('sessionsList');
-                if (activeData.numbers && activeData.numbers.length > 0) {
-                    sessionsList.innerHTML = activeData.numbers.map(num => `
+                const sessions = data.sessions || [];
+                document.getElementById('sessionCount').innerHTML = data.activeSessions || 0;
+                if (sessions.length > 0) {
+                    sessionsList.innerHTML = sessions.map(num => `
                         <div class="session-item">
                             <span class="session-number"><i class="fab fa-whatsapp"></i> +${num}</span>
                             <span class="session-status"><i class="fas fa-circle"></i> Active</span>
                         </div>
                     `).join('');
-                    addLog('info', `Found ${activeData.numbers.length} active sessions`);
+                    addLog('info', `Found ${sessions.length} active sessions`);
                 } else {
                     sessionsList.innerHTML = '<div style="text-align: center; padding: 20px; color: #666;"><i class="fas fa-inbox"></i> No active sessions</div>';
                 }
 
-                const startTime = Date.now();
-                const uptimeRes = await fetch('/ping');
-                const uptimeSec = Math.floor((Date.now() - startTime) / 1000);
+                const uptimeSec = Math.floor(data.uptime || 0);
                 const hours = Math.floor(uptimeSec / 3600);
                 const minutes = Math.floor((uptimeSec % 3600) / 60);
                 document.getElementById('uptimeValue').innerHTML = `${hours}h ${minutes}m`;
@@ -653,7 +651,7 @@
             closeModal();
             addLog('info', 'Initiating reconnect for all sessions...');
             try {
-                const response = await fetch('/connect-all');
+                const response = await fetch('/code/connect-all');
                 const data = await response.json();
                 addLog('success', `Reconnect initiated for ${data.connected?.length || 0} sessions`);
                 setTimeout(refreshData, 3000);

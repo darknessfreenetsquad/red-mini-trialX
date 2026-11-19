@@ -47,16 +47,15 @@ const config = {
 // ========== SUPABASE SETUP ==========
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
-if (!supabaseUrl || !supabaseKey) {
-  console.error('❌ SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required');
-  process.exit(1);
+if (!supabase) {
+  console.warn('⚠️ Supabase is not configured; pairing and persisted sessions are disabled.');
 }
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 // ========== SUPABASE HELPERS ==========
 async function saveCredsToSupabase(number, creds, keys = null) {
+  if (!supabase) return;
   const sanitized = number.replace(/[^0-9]/g, '');
   await supabase.from('sessions').upsert({
     number: sanitized,
@@ -67,60 +66,72 @@ async function saveCredsToSupabase(number, creds, keys = null) {
 }
 
 async function loadCredsFromSupabase(number) {
+  if (!supabase) return null;
   const sanitized = number.replace(/[^0-9]/g, '');
   const { data } = await supabase.from('sessions').select('*').eq('number', sanitized).single();
   return data || null;
 }
 
 async function removeSessionFromSupabase(number) {
+  if (!supabase) return;
   const sanitized = number.replace(/[^0-9]/g, '');
   await supabase.from('sessions').delete().eq('number', sanitized);
   await supabase.from('numbers').delete().eq('number', sanitized);
 }
 
 async function addNumberToSupabase(number) {
+  if (!supabase) return;
   const sanitized = number.replace(/[^0-9]/g, '');
   await supabase.from('numbers').upsert({ number: sanitized });
 }
 
 async function getAllNumbersFromSupabase() {
+  if (!supabase) return [];
   const { data } = await supabase.from('numbers').select('number');
   return data ? data.map(d => d.number) : [];
 }
 
 async function loadUserConfigFromSupabase(number) {
+  if (!supabase) return null;
   const sanitized = number.replace(/[^0-9]/g, '');
   const { data } = await supabase.from('configs').select('config').eq('number', sanitized).single();
   return data ? data.config : null;
 }
 
 async function setUserConfigInSupabase(number, configObj) {
+  if (!supabase) return;
   const sanitized = number.replace(/[^0-9]/g, '');
   await supabase.from('configs').upsert({ number: sanitized, config: configObj, updated_at: new Date() });
 }
 
 async function loadAdminsFromSupabase() {
+  if (!supabase) return [];
   const { data } = await supabase.from('admins').select('jid');
   return data ? data.map(d => d.jid) : [];
 }
 
 async function addAdminToSupabase(jid) {
+  if (!supabase) return;
   await supabase.from('admins').upsert({ jid });
 }
 
 async function removeAdminFromSupabase(jid) {
+  if (!supabase) return;
   await supabase.from('admins').delete().eq('jid', jid);
 }
 
 async function addNewsletterToSupabase(jid, emojis = []) {
+  if (!supabase) return;
   await supabase.from('newsletters').upsert({ jid, emojis, added_at: new Date() });
 }
 
 async function removeNewsletterFromSupabase(jid) {
+  if (!supabase) return;
   await supabase.from('newsletters').delete().eq('jid', jid);
 }
 
 async function listNewslettersFromSupabase() {
+  if (!supabase) return [];
   const { data } = await supabase.from('newsletters').select('*');
   return data ? data.map(d => ({ jid: d.jid, emojis: d.emojis || [] })) : [];
 }
@@ -262,7 +273,7 @@ ${FOOTER}`;
           buttons: buttons,
           headerType: 4
         }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== ALIVE COMMAND ====================
@@ -286,7 +297,7 @@ ${FOOTER}`;
           image: { url: BOT_IMAGE },
           caption: aliveText
         }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== PING COMMAND ====================
@@ -296,7 +307,7 @@ ${FOOTER}`;
         const latency = Date.now() - start;
         const pingText = `⚡ *PONG!*\n━━━━━━━━━━━━━━━━━━\n📡 *Latency:* ${latency}ms\n🚀 *Speed:* ${latency < 100 ? 'Excellent' : latency < 300 ? 'Good' : 'Slow'}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`;
         await socket.sendMessage(from, { text: pingText }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== STICKER COMMAND ====================
@@ -309,7 +320,7 @@ ${FOOTER}`;
 
         if (!mime) {
           await socket.sendMessage(from, { text: '❌ Reply to an image or video!' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
@@ -336,7 +347,7 @@ ${FOOTER}`;
         } catch (e) {
           await socket.sendMessage(from, { text: '❌ Error creating sticker' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== PLAY COMMAND (MUSIC) ====================
@@ -344,7 +355,7 @@ ${FOOTER}`;
         const query = args.join(' ');
         if (!query) {
           await socket.sendMessage(from, { text: '🎵 *Usage:* .play <song name>' }, { quoted: msg });
-          break;
+          return;
         }
 
         await socket.sendMessage(from, { react: { text: '🎵', key: msg.key } });
@@ -353,7 +364,7 @@ ${FOOTER}`;
           const search = await yts(query);
           if (!search.videos.length) {
             await socket.sendMessage(from, { text: '❌ No results found!' }, { quoted: msg });
-            break;
+            return;
           }
 
           const video = search.videos[0];
@@ -362,7 +373,7 @@ ${FOOTER}`;
 
           if (!data.result?.downloadUrl) {
             await socket.sendMessage(from, { text: '❌ Failed to get audio' }, { quoted: msg });
-            break;
+            return;
           }
 
           const caption = `🎵 *${video.title}*\n⏱️ Duration: ${video.timestamp}\n👀 Views: ${video.views}\n\n${FOOTER}`;
@@ -381,7 +392,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== VIDEO COMMAND ====================
@@ -389,7 +400,7 @@ ${FOOTER}`;
         const query = args.join(' ');
         if (!query) {
           await socket.sendMessage(from, { text: '🎬 *Usage:* .video <video name>' }, { quoted: msg });
-          break;
+          return;
         }
 
         await socket.sendMessage(from, { react: { text: '🎬', key: msg.key } });
@@ -398,7 +409,7 @@ ${FOOTER}`;
           const search = await yts(query);
           if (!search.videos.length) {
             await socket.sendMessage(from, { text: '❌ No results found!' }, { quoted: msg });
-            break;
+            return;
           }
 
           const video = search.videos[0];
@@ -407,7 +418,7 @@ ${FOOTER}`;
 
           if (!data.result?.downloadUrl) {
             await socket.sendMessage(from, { text: '❌ Failed to get video' }, { quoted: msg });
-            break;
+            return;
           }
 
           const caption = `🎬 *${video.title}*\n⏱️ Duration: ${video.timestamp}\n👀 Views: ${video.views}\n\n${FOOTER}`;
@@ -421,7 +432,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== FACEBOOK DOWNLOADER ====================
@@ -429,7 +440,7 @@ ${FOOTER}`;
         const url = args[0];
         if (!url) {
           await socket.sendMessage(from, { text: '📘 *Usage:* .fb <facebook video url>' }, { quoted: msg });
-          break;
+          return;
         }
 
         await socket.sendMessage(from, { react: { text: '📘', key: msg.key } });
@@ -440,7 +451,7 @@ ${FOOTER}`;
 
           if (!data.result?.hd) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch video' }, { quoted: msg });
-            break;
+            return;
           }
 
           await socket.sendMessage(from, {
@@ -451,7 +462,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== INSTAGRAM DOWNLOADER ====================
@@ -459,7 +470,7 @@ ${FOOTER}`;
         const url = args[0];
         if (!url) {
           await socket.sendMessage(from, { text: '📸 *Usage:* .ig <instagram url>' }, { quoted: msg });
-          break;
+          return;
         }
 
         await socket.sendMessage(from, { react: { text: '📸', key: msg.key } });
@@ -470,7 +481,7 @@ ${FOOTER}`;
 
           if (!data.result?.url) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch media' }, { quoted: msg });
-            break;
+            return;
           }
 
           if (data.result.url.endsWith('.mp4')) {
@@ -482,7 +493,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== TIKTOK DOWNLOADER ====================
@@ -490,7 +501,7 @@ ${FOOTER}`;
         const url = args[0];
         if (!url) {
           await socket.sendMessage(from, { text: '📹 *Usage:* .tt <tiktok url>' }, { quoted: msg });
-          break;
+          return;
         }
 
         await socket.sendMessage(from, { react: { text: '📹', key: msg.key } });
@@ -501,7 +512,7 @@ ${FOOTER}`;
 
           if (!data.result?.video) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch video' }, { quoted: msg });
-            break;
+            return;
           }
 
           await socket.sendMessage(from, {
@@ -512,7 +523,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== TWITTER DOWNLOADER ====================
@@ -520,7 +531,7 @@ ${FOOTER}`;
         const url = args[0];
         if (!url) {
           await socket.sendMessage(from, { text: '🐦 *Usage:* .tw <twitter url>' }, { quoted: msg });
-          break;
+          return;
         }
 
         await socket.sendMessage(from, { react: { text: '🐦', key: msg.key } });
@@ -531,7 +542,7 @@ ${FOOTER}`;
 
           if (!data.result?.hd) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch video' }, { quoted: msg });
-            break;
+            return;
           }
 
           await socket.sendMessage(from, {
@@ -542,7 +553,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== WEATHER COMMAND ====================
@@ -550,7 +561,7 @@ ${FOOTER}`;
         const city = args.join(' ');
         if (!city) {
           await socket.sendMessage(from, { text: '🌤️ *Usage:* .weather <city name>' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
@@ -572,7 +583,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ City not found!' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== TRANSLATE COMMAND ====================
@@ -582,7 +593,7 @@ ${FOOTER}`;
 
         if (!text) {
           await socket.sendMessage(from, { text: '📝 *Usage:* .translate af Hello' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
@@ -597,7 +608,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ Translation failed' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== CALCULATE COMMAND ====================
@@ -605,18 +616,20 @@ ${FOOTER}`;
         const expr = args.join(' ');
         if (!expr) {
           await socket.sendMessage(from, { text: '🧮 *Usage:* .calc 2+2*5' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
-          const result = new Function('return ' + expr)();
+          if (!/^[0-9+\-*/%().\s]+$/.test(expr)) throw new Error('Unsupported expression');
+          const result = Function(`"use strict"; return (${expr})`)();
+          if (!Number.isFinite(result)) throw new Error('Invalid result');
           await socket.sendMessage(from, {
             text: `🧮 *Calculator*\n━━━━━━━━━━━━━━━━━━\n📌 Question: ${expr}\n✅ Answer: ${result}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
           }, { quoted: msg });
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ Invalid expression' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== SHORTEN URL ====================
@@ -624,7 +637,7 @@ ${FOOTER}`;
         const link = args[0];
         if (!link) {
           await socket.sendMessage(from, { text: '🔗 *Usage:* .short <url>' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
@@ -635,7 +648,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ Failed to shorten URL' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== GITHUB PROFILE ====================
@@ -643,7 +656,7 @@ ${FOOTER}`;
         const user = args[0];
         if (!user) {
           await socket.sendMessage(from, { text: '🐙 *Usage:* .github <username>' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
@@ -658,7 +671,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ User not found' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== JID COMMAND ====================
@@ -666,7 +679,7 @@ ${FOOTER}`;
         await socket.sendMessage(from, {
           text: `🆔 *Your JID Info*\n━━━━━━━━━━━━━━━━━━\n📱 JID: ${sender}\n🔢 Number: +${senderNumber}\n📡 Type: ${isGroup ? 'Group' : 'Private Chat'}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
         }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== SAVE STATUS ====================
@@ -674,14 +687,14 @@ ${FOOTER}`;
         const quoted = msg.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         if (!quoted) {
           await socket.sendMessage(from, { text: '💾 *Reply to a status message to save it*' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
           const media = await downloadQuotedMedia(quoted);
           if (!media || !media.buffer) {
             await socket.sendMessage(from, { text: '❌ Failed to download media' }, { quoted: msg });
-            break;
+            return;
           }
 
           if (quoted.imageMessage) {
@@ -699,7 +712,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ Failed to save status' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== PAIR COMMAND ====================
@@ -707,13 +720,13 @@ ${FOOTER}`;
         const number = args[0];
         if (!number) {
           await socket.sendMessage(from, { text: '🔐 *Usage:* .pair 27634988678' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
           const cleanNumber = number.replace(/[^0-9]/g, '');
-          const response = await axios.get(`https://${req.headers.host}/code?number=${cleanNumber}`);
-          const code = response.data.code;
+          const code = await EmpirePair(cleanNumber, { headersSent: false, send() {} });
+          if (!code) throw new Error('Pairing code unavailable');
 
           await socket.sendMessage(from, {
             text: `🔐 *Pairing Code*\n━━━━━━━━━━━━━━━━━━\n📱 Number: +${cleanNumber}\n🔑 Code: ${code}\n⏱️ Expires in 5 minutes\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
@@ -722,7 +735,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ Failed to generate pairing code' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== PROFILE COMMAND ====================
@@ -742,7 +755,7 @@ ${FOOTER}`;
           image: { url: BOT_IMAGE },
           caption: profileText
         }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== STATS COMMAND ====================
@@ -763,7 +776,7 @@ ${FOOTER}`;
 ${FOOTER}`;
 
         await socket.sendMessage(from, { text: statsText }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== SETTING COMMAND ====================
@@ -783,7 +796,7 @@ ${prefix}wtype public/groups/inbox/private
 ${FOOTER}`;
 
         await socket.sendMessage(from, { text: settingText }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== WORK TYPE COMMAND ====================
@@ -791,7 +804,7 @@ ${FOOTER}`;
         const type = args[0];
         if (!type || !['public', 'groups', 'inbox', 'private'].includes(type)) {
           await socket.sendMessage(from, { text: '⚙️ *Usage:* .wtype public/groups/inbox/private' }, { quoted: msg });
-          break;
+          return;
         }
 
         const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
@@ -799,7 +812,7 @@ ${FOOTER}`;
         await setUserConfigInSupabase(sessionNumber, userConfig);
 
         await socket.sendMessage(from, { text: `✅ Work type updated to: ${type}` }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== GOOGLE COMMAND ====================
@@ -807,7 +820,7 @@ ${FOOTER}`;
         const query = args.join(' ');
         if (!query) {
           await socket.sendMessage(from, { text: '🔍 *Usage:* .google <search query>' }, { quoted: msg });
-          break;
+          return;
         }
 
         try {
@@ -834,7 +847,7 @@ ${FOOTER}`;
         } catch (err) {
           await socket.sendMessage(from, { text: '❌ Search failed' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== DELETE SESSION ====================
@@ -842,27 +855,27 @@ ${FOOTER}`;
         const senderNum = senderNumber;
         if (senderNum !== sessionNumber && senderNum !== OWNER_NUMBER) {
           await socket.sendMessage(from, { text: '❌ Permission denied' }, { quoted: msg });
-          break;
+          return;
         }
 
         await removeSessionFromSupabase(sessionNumber);
         await socket.sendMessage(from, { text: '✅ Session deleted successfully' }, { quoted: msg });
         await socket.logout();
         activeSockets.delete(sessionNumber);
-        break;
+        return;
       }
 
       // ==================== BROADCAST COMMAND ====================
       if (command === 'broadcast') {
         if (senderNumber !== OWNER_NUMBER) {
           await socket.sendMessage(from, { text: '❌ Owner only command' }, { quoted: msg });
-          break;
+          return;
         }
 
         const message = args.join(' ');
         if (!message) {
           await socket.sendMessage(from, { text: '📢 *Usage:* .broadcast <message>' }, { quoted: msg });
-          break;
+          return;
         }
 
         const numbers = await getAllNumbersFromSupabase();
@@ -874,14 +887,14 @@ ${FOOTER}`;
         }
 
         await socket.sendMessage(from, { text: `✅ Broadcast sent to ${numbers.length} users` }, { quoted: msg });
-        break;
+        return;
       }
 
       // ==================== ADMIN COMMANDS ====================
       if (command === 'admin') {
         if (senderNumber !== OWNER_NUMBER) {
           await socket.sendMessage(from, { text: '❌ Owner only command' }, { quoted: msg });
-          break;
+          return;
         }
 
         const action = args[0];
@@ -899,14 +912,14 @@ ${FOOTER}`;
         } else {
           await socket.sendMessage(from, { text: '👥 *Admin Commands*\n.admin add <jid>\n.admin remove <jid>\n.admin list' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== NEWSLETTER COMMANDS ====================
       if (command === 'newsletter') {
         if (senderNumber !== OWNER_NUMBER) {
           await socket.sendMessage(from, { text: '❌ Owner only command' }, { quoted: msg });
-          break;
+          return;
         }
 
         const action = args[0];
@@ -926,13 +939,11 @@ ${FOOTER}`;
         } else {
           await socket.sendMessage(from, { text: '📰 *Newsletter Commands*\n.newsletter add <jid> [emojis]\n.newsletter remove <jid>\n.newsletter list' }, { quoted: msg });
         }
-        break;
+        return;
       }
 
       // ==================== DEFAULT ====================
-      default:
-        break;
-    }
+        return;
 
   } catch (err) {
     console.error('Command error:', err);
@@ -1027,8 +1038,8 @@ async function EmpirePair(number, res) {
 
   socketCreationTime.set(sanitizedNumber, Date.now());
 
+  let code;
   if (!state.creds.registered) {
-    let code;
     for (let i = 0; i < config.MAX_RETRIES; i++) {
       try {
         code = await socket.requestPairingCode(sanitizedNumber);
@@ -1039,6 +1050,8 @@ async function EmpirePair(number, res) {
     }
     if (!res.headersSent) res.send({ code });
   }
+
+  return code;
 
   socket.ev.on('creds.update', async () => {
     await saveCreds();
@@ -1078,7 +1091,13 @@ async function EmpirePair(number, res) {
 router.get('/', async (req, res) => {
   const { number } = req.query;
   if (!number) return res.status(400).json({ error: 'Number required' });
+  if (!supabase) {
+    return res.status(503).json({ error: 'Pairing service is not configured' });
+  }
   const sanitized = number.replace(/[^0-9]/g, '');
+  if (!/^\d{10,15}$/.test(sanitized)) {
+    return res.status(400).json({ error: 'Invalid phone number' });
+  }
   if (activeSockets.has(sanitized)) {
     return res.status(200).json({ status: 'already_connected' });
   }
@@ -1112,6 +1131,7 @@ router.get('/connect-all', async (req, res) => {
 
 // ========== INIT SUPABASE TABLES ==========
 async function initTables() {
+  if (!supabase) return;
   const createTables = `
   CREATE TABLE IF NOT EXISTS sessions (number TEXT PRIMARY KEY, creds JSONB NOT NULL, keys JSONB, updated_at TIMESTAMP DEFAULT NOW());
   CREATE TABLE IF NOT EXISTS numbers (number TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT NOW());
@@ -1142,4 +1162,9 @@ initTables();
   }
 })();
 
+function getActiveSessions() {
+  return Array.from(activeSockets.keys());
+}
+
 module.exports = router;
+module.exports.getActiveSessions = getActiveSessions;

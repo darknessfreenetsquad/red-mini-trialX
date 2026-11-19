@@ -1,7 +1,5 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs-extra');
-
 const app = express();
 const PORT = process.env.PORT || 8002;
 
@@ -28,7 +26,7 @@ app.get('/pair', (req, res) => {
 // API endpoint to get bot status
 app.get('/api/status', async (req, res) => {
     try {
-        const { activeSockets, getActiveSessions } = require('./pair');
+        const { getActiveSessions } = require('./pair');
         const sessions = getActiveSessions ? getActiveSessions() : [];
         
         res.json({
@@ -38,6 +36,8 @@ app.get('/api/status', async (req, res) => {
             newsletter: process.env.NEWSLETTER_JID || '120363427119111004@newsletter',
             uptime: process.uptime(),
             activeSessions: sessions.length,
+            sessions,
+            databaseConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
             timestamp: new Date().toISOString()
         });
     } catch (err) {
