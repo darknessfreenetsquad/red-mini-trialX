@@ -19,6 +19,7 @@ const defaultConfig = require('./config');
 
 const {
   default: makeWASocket,
+  Browsers,
   delay,
   getContentType,
   makeCacheableSignalKeyStore,
@@ -1010,7 +1011,11 @@ function waitForPairingReady(socket, timeoutMs = 30000) {
     };
     const onUpdate = update => {
       if (update.qr) finish();
-      else if (update.connection === 'close') finish(new Error('WhatsApp connection closed'));
+      else if (update.connection === 'close') {
+        const statusCode = update.lastDisconnect?.error?.output?.statusCode;
+        const reason = update.lastDisconnect?.error?.message || 'unknown reason';
+        finish(new Error(`WhatsApp connection closed${statusCode ? ` (${statusCode})` : ''}: ${reason}`));
+      }
     };
     socket.ev.on('connection.update', onUpdate);
   });
@@ -1037,7 +1042,13 @@ async function EmpirePair(number, requestCode = false) {
       auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
       printQRInTerminal: false,
       logger,
-      browser: ['Ubuntu', 'Chrome', '20.0.04']
+      // Safari is a supported WhatsApp Web identity and avoids the stale
+      // Ubuntu/Chrome fingerprint that was being rejected during pairing.
+      browser: Browsers.macOS('Safari'),
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000,
+      keepAliveIntervalMs: 30000,
+      markOnlineOnConnect: false
     });
     guardSocketSender(socket, number);
     const entry = { socket, code: null, timer: null, opening: Promise.resolve() };
