@@ -4,7 +4,6 @@ const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
-const crypto = require('crypto');
 const runFile = promisify(execFile);
 const { loadPlugins } = require('./plugin-loader');
 const commandPlugins = loadPlugins();
@@ -1168,36 +1167,8 @@ async function startSavedSessions() {
 
 // ========== ROUTES ==========
 const requestCounts = new Map();
-let lastTokenRotation = 0;
-function authorizeDashboard(req, res) {
-  res.set('Cache-Control', 'no-store');
-  const token = process.env.DASHBOARD_TOKEN;
-  if (!token) {
-    res.status(503).json({ error: 'Set DASHBOARD_TOKEN to enable pairing and reconnect' });
-    return false;
-  }
-  const supplied = Buffer.from(req.get('authorization') || '');
-  const expected = Buffer.from(`Bearer ${token}`);
-  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
-    res.status(401).json({ error: 'Invalid dashboard token' });
-    return false;
-  }
-  return true;
-}
-
-router.post('/token', (req, res) => {
-  if (!authorizeDashboard(req, res)) return;
-  if (Date.now() - lastTokenRotation < 10000) {
-    return res.status(429).json({ error: 'Token was recently changed; wait a few seconds' });
-  }
-  const token = crypto.randomBytes(32).toString('hex');
-  process.env.DASHBOARD_TOKEN = token;
-  lastTokenRotation = Date.now();
-  res.json({ token, message: 'Token rotated. Save this token; it will not be shown again.' });
-});
 
 router.post('/', async (req, res) => {
-  if (!authorizeDashboard(req, res)) return;
   const now = Date.now();
   for (const [ip, entry] of requestCounts) if (entry.expires <= now) requestCounts.delete(ip);
   const entry = requestCounts.get(req.ip) || { count: 0, expires: now + 60000 };
@@ -1225,7 +1196,6 @@ router.get('/ping', (req, res) => {
 });
 
 router.post('/connect-all', async (req, res) => {
-  if (!authorizeDashboard(req, res)) return;
   if (!supabase) return res.status(503).json({ error: 'Supabase is not configured' });
   try {
     const results = await startSavedSessions();

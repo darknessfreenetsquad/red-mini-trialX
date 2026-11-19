@@ -8,7 +8,6 @@ const parse5 = require('parse5');
 
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
-process.env.DASHBOARD_TOKEN = 'test-dashboard-token';
 const app = require('../index');
 const server = app.listen(0);
 after(() => server.close());
@@ -23,10 +22,7 @@ test('both HTML documents parse without errors and their inline scripts compile'
     for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
       if (match[1].trim()) assert.doesNotThrow(() => new vm.Script(match[1], { filename: file }));
     }
-    if (file === 'status.html') {
-      assert.match(html, /createDashboardToken/);
-      assert.match(html, /\/code\/token/);
-    }
+    if (file === 'status.html') assert.doesNotMatch(html, /dashboardToken|createDashboardToken|\/code\/token/);
   }
 });
 
@@ -52,7 +48,7 @@ test('frontend pages, redirect and status API are served', async () => {
 
 test('pairing validates input and fails safely when database is not configured', async () => {
   const send = number => request('/code', {
-    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-dashboard-token' }, body: JSON.stringify({ number })
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number })
   });
   assert.equal((await send('123')).status, 400);
   assert.equal((await send({ bad: 'type' })).status, 400);
@@ -62,30 +58,11 @@ test('pairing validates input and fails safely when database is not configured',
   assert.equal((await request('/code?number=27634988678')).status, 404);
 });
 
-test('pairing and reconnect require a valid dashboard token', async () => {
+test('pairing and reconnect are public but still validate input and configuration', async () => {
   const response = await request('/code/connect-all', { method: 'POST' });
-  assert.equal(response.status, 401);
-  assert.match((await response.json()).error, /token/i);
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).error, /supabase/i);
   const pairResponse = await request('/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: '27634988678' }) });
-  assert.equal(pairResponse.status, 401);
-  assert.equal((await request('/code/connect-all')).status, 404);
-});
-
-test('dashboard can rotate its token only with the current token', async () => {
-  const previous = process.env.DASHBOARD_TOKEN;
-  try {
-    const response = await request('/code/token', {
-      method: 'POST', headers: { Authorization: 'Bearer test-dashboard-token' }
-    });
-    assert.equal(response.status, 200);
-    const data = await response.json();
-    assert.match(data.token, /^[a-f0-9]{64}$/);
-    assert.equal((await request('/code/token', { method: 'POST', headers: { Authorization: 'Bearer test-dashboard-token' } })).status, 401);
-    const invalidNumber = await request('/code', {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.token}` }, body: JSON.stringify({ number: 'bad' })
-    });
-    assert.equal(invalidNumber.status, 400);
-  } finally {
-    process.env.DASHBOARD_TOKEN = previous;
-  }
+  assert.equal(pairResponse.status, 503);
+  assert.equal((await request('/code/token', { method: 'POST' })).status, 404);
 });

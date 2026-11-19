@@ -8,7 +8,6 @@ const baileys = require('@whiskeysockets/baileys');
 
 process.env.SUPABASE_URL = 'https://example.supabase.co';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-key';
-process.env.DASHBOARD_TOKEN = 'test-dashboard-token';
 delete process.env.OWNER_NUMBER;
 const tables = { sessions: new Map(), numbers: new Map(), configs: new Map(), admins: new Map(), newsletters: new Map() };
 const copy = value => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -70,7 +69,7 @@ Module._load = originalLoad;
 const server = app.listen(0);
 after(() => server.close());
 const request = (path, options) => fetch(`http://127.0.0.1:${server.address().port}${path}`, options);
-const postCode = () => request('/code', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer test-dashboard-token' }, body: JSON.stringify({ number: '+27 63 498 8678' }) });
+const postCode = () => request('/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: '+27 63 498 8678' }) });
 async function until(condition) {
   for (let i = 0; i < 100; i++) {
     if (condition()) return;
@@ -122,7 +121,7 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   assert.equal(status.database, 'connected');
   assert.deepEqual(status.sessions, ['*******8678']);
   assert.equal((await (await postCode()).json()).status, 'already_connected');
-  assert.equal((await request('/code/connect-all', { method: 'POST' })).status, 401);
+  assert.equal((await request('/code/connect-all', { method: 'POST' })).status, 200);
 
   const command = (body, from, fromMe = false) => socket.ev.emit('messages.upsert', {
     messages: [{ key: { remoteJid: from, fromMe }, message: { conversation: body } }]
@@ -138,7 +137,7 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
 
   socket.ev.emit('connection.update', { connection: 'close', lastDisconnect: { error: { output: { statusCode: baileys.DisconnectReason.connectionLost } } } });
   assert.equal(pair.getActiveSessions().length, 0);
-  const reconnect = await request('/code/connect-all', { method: 'POST', headers: { Authorization: 'Bearer test-dashboard-token' } });
+  const reconnect = await request('/code/connect-all', { method: 'POST' });
   assert.equal(reconnect.status, 200);
   assert.equal((await reconnect.json()).attempted, 1);
   assert.equal(sockets.length, 2);

@@ -258,12 +258,6 @@
                 <div style="font-size: 0.65rem; color: #666; margin-top: 5px;"><i class="fas fa-info-circle"></i> Include country code without '+'</div>
             </div>
 
-            <div class="input-group">
-                <label for="dashboardToken"><i class="fas fa-lock"></i> Dashboard token</label>
-                <input type="password" id="dashboardToken" autocomplete="off" placeholder="Your server's dashboard token">
-                <div style="font-size: 0.65rem; color: #888; margin-top: 5px;">Ask the server administrator for the token. Never share your pairing code.</div>
-            </div>
-
             <button class="pair-btn" id="pairBtn"><i class="fas fa-link"></i> Generate Pairing Code</button>
 
             <div id="resultBox" class="result-box">
@@ -286,24 +280,9 @@
     <script>
         const pairBtn = document.getElementById('pairBtn');
         const phoneInput = document.getElementById('phoneNumber');
-        const tokenInput = document.getElementById('dashboardToken');
         const resultBox = document.getElementById('resultBox');
         const codeDisplay = document.getElementById('codeDisplay');
         const copyBtn = document.getElementById('copyBtn');
-        const TOKEN_STORAGE_KEY = 'red-mini-dashboard-token';
-
-        function loadDashboardToken() {
-            const fragment = new URLSearchParams(window.location.hash.slice(1));
-            const sharedToken = fragment.get('token');
-            const token = sharedToken || localStorage.getItem(TOKEN_STORAGE_KEY) || '';
-            if (sharedToken) {
-                localStorage.setItem(TOKEN_STORAGE_KEY, sharedToken);
-                history.replaceState(null, '', window.location.pathname + window.location.search);
-            }
-            tokenInput.value = token;
-        }
-
-        loadDashboardToken();
 
         async function generateCode() {
             if (pairBtn.disabled) return;
@@ -318,12 +297,6 @@
                 alert('Please enter a valid number with country code');
                 return;
             }
-            if (!tokenInput.value) {
-                alert('Please enter the dashboard token');
-                return;
-            }
-            localStorage.setItem(TOKEN_STORAGE_KEY, tokenInput.value.trim());
-
             pairBtn.disabled = true;
             pairBtn.innerHTML = '<div class="spinner"></div> Requesting code...';
             resultBox.classList.remove('show');
@@ -331,7 +304,7 @@
             try {
                 const response = await fetch('/code', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tokenInput.value}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ number })
                 });
                 const data = await response.json();
