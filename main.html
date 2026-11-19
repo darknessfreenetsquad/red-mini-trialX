@@ -300,14 +300,19 @@
             pairBtn.disabled = true;
             pairBtn.innerHTML = '<div class="spinner"></div> Requesting code...';
             resultBox.classList.remove('show');
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 90000);
 
             try {
                 const response = await fetch('/code', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ number })
+                    body: JSON.stringify({ number }),
+                    signal: controller.signal
                 });
-                const data = await response.json();
+                const raw = await response.text();
+                let data;
+                try { data = JSON.parse(raw); } catch (_) { data = { error: raw || `Server returned HTTP ${response.status}` }; }
 
                 if (!response.ok) {
                     alert(data.error || 'Failed to get code. Please try again.');
@@ -322,8 +327,13 @@
                     alert('Failed to get code. Please try again.');
                 }
             } catch (error) {
-                alert('Connection error. Make sure the bot is running.');
+                if (error.name === 'AbortError') {
+                    alert('The pairing request timed out. Check the dashboard health and try again.');
+                } else {
+                    alert(`Network error: ${error.message || 'the server could not be reached'}`);
+                }
             } finally {
+                clearTimeout(timeout);
                 pairBtn.disabled = false;
                 pairBtn.innerHTML = '<i class="fas fa-link"></i> Generate Pairing Code';
             }
