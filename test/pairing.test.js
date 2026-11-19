@@ -102,6 +102,14 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   assert.match(menuMessage.text, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
   assert.equal(menuMessage.buttons[0].buttonId, '.alive');
 
+  socket.ev.emit('messages.upsert', {
+    messages: [
+      { key: { remoteJid: '12345678901@s.whatsapp.net' }, message: { conversation: 'not a command' } },
+      { key: { remoteJid: '12345678901@s.whatsapp.net' }, message: { ephemeralMessage: { message: { extendedTextMessage: { text: '.ping' } } } } }
+    ]
+  });
+  await until(() => socket.sent.some(item => item.message.text?.includes('PONG')));
+
   socket.options.auth.creds.registered = true;
   socket.ev.emit('creds.update');
   await socket.options.auth.keys.set({ session: { device1: { value: Buffer.from('secret-key') } } });
@@ -119,7 +127,7 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   const command = (body, from, fromMe = false) => socket.ev.emit('messages.upsert', {
     messages: [{ key: { remoteJid: from, fromMe }, message: { conversation: body } }]
   });
-  command('.admin list', '27634988678@s.whatsapp.net', true);
+  command('.admin list', '12345678901@s.whatsapp.net');
   await until(() => socket.sent.some(item => item.message.text?.includes('Owner only')));
   command('.wtype private', '27634988678@s.whatsapp.net', true);
   await until(() => tables.configs.get('27634988678')?.config.WORK_TYPE === 'private');

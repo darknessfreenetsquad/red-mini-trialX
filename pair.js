@@ -16,6 +16,7 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const { createClient } = require('@supabase/supabase-js');
 const { useSupabaseAuthState } = require('./auth-state');
+const defaultConfig = require('./config');
 
 const {
   default: makeWASocket,
@@ -28,7 +29,8 @@ const {
 
 // ========== CONFIGURATION ==========
 const BOT_NAME = process.env.BOT_NAME || 'Red Mini';
-const OWNER_NUMBER = /^\d{10,15}$/.test(process.env.OWNER_NUMBER || '') ? process.env.OWNER_NUMBER : null;
+const configuredOwner = process.env.OWNER_NUMBER || defaultConfig.OWNER_NUMBER || '';
+const OWNER_NUMBER = /^\d{10,15}$/.test(configuredOwner) ? configuredOwner : null;
 const NEWSLETTER_JID = process.env.NEWSLETTER_JID || '120363427119111004@newsletter';
 const FOOTER = '© ʀᴇᴅ ᴅʀᴀɢᴏɴ ᴅғs';
 const BOT_IMAGE = 'https://files.catbox.moe/eumprt.jpg';
@@ -185,22 +187,37 @@ const socketCreationTime = new Map();
 const otpStore = new Map();
 
 // ========== COMMAND HANDLER ==========
+function unwrapMessageContent(message) {
+  let content = message;
+  for (let i = 0; i < 5; i++) {
+    const nested = content?.ephemeralMessage?.message ||
+      content?.viewOnceMessage?.message ||
+      content?.viewOnceMessageV2?.message ||
+      content?.documentWithCaptionMessage?.message ||
+      content?.editedMessage?.message;
+    if (!nested) break;
+    content = nested;
+  }
+  return content;
+}
+
 function setupCommandHandlers(socket, sessionNumber) {
   socket.ev.on('messages.upsert', async ({ messages }) => {
-    const msg = messages[0];
-    if (!msg?.key?.remoteJid || !msg.message || msg.key.remoteJid === 'status@broadcast') return;
+    for (const msg of messages || []) {
+    if (!msg?.key?.remoteJid || !msg.message || msg.key.remoteJid === 'status@broadcast') continue;
 
-    const type = getContentType(msg.message);
+    const content = unwrapMessageContent(msg.message);
+    const type = getContentType(content);
     let body = '';
 
-    if (type === 'conversation') body = msg.message.conversation || '';
-    else if (type === 'extendedTextMessage') body = msg.message.extendedTextMessage.text || '';
-    else if (type === 'imageMessage') body = msg.message.imageMessage.caption || '';
-    else if (type === 'videoMessage') body = msg.message.videoMessage.caption || '';
-    else if (type === 'buttonsResponseMessage') body = msg.message.buttonsResponseMessage?.selectedButtonId || '';
-    else if (type === 'listResponseMessage') body = msg.message.listResponseMessage?.singleSelectReply?.selectedRowId || '';
+    if (type === 'conversation') body = content.conversation || '';
+    else if (type === 'extendedTextMessage') body = content.extendedTextMessage?.text || '';
+    else if (type === 'imageMessage') body = content.imageMessage?.caption || '';
+    else if (type === 'videoMessage') body = content.videoMessage?.caption || '';
+    else if (type === 'buttonsResponseMessage') body = content.buttonsResponseMessage?.selectedButtonId || '';
+    else if (type === 'listResponseMessage') body = content.listResponseMessage?.singleSelectReply?.selectedRowId || '';
 
-    if (!body || typeof body !== 'string') return;
+    if (!body || typeof body !== 'string') continue;
 
     const from = msg.key.remoteJid;
     const sender = msg.key.fromMe ? socket.user.id.split(':')[0] + '@s.whatsapp.net' : (msg.key.participant || msg.key.remoteJid);
@@ -211,7 +228,8 @@ function setupCommandHandlers(socket, sessionNumber) {
     const command = isCmd ? body.slice(prefix.length).trim().split(' ').shift().toLowerCase() : null;
     const args = body.trim().split(/ +/).slice(1);
 
-    if (!command) return;
+    if (!command) continue;
+    console.log(`Command received: ${prefix}${command} from ${senderNumber} (${type})`);
 
     try {
       const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
@@ -922,6 +940,7 @@ ${FOOTER}`;
   } catch (err) {
     console.error('Command error:', err);
     await socket.sendMessage(msg.key.remoteJid, { text: '❌ An error occurred' }).catch(() => {});
+  }
   }
   });
 }
