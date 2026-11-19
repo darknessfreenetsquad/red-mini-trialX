@@ -19,6 +19,8 @@ Red Mini is an Express dashboard and WhatsApp bot. The frontend and API run on t
 
 Without Supabase or a dashboard token, the web service starts but pairing and session restoration are disabled. Use the same dashboard token in the pairing page and reconnect dialog. Never share pairing codes, the Supabase service-role key, or the token publicly.
 
+`.play` and `.video` use the official YouTube Data API search and therefore require a server-only `YOUTUBE_API_KEY`. Create a YouTube Data API v3 key in Google Cloud, enable the YouTube Data API v3 for that project, and place the key only in the server environment. `.play song` returns Audio and Audio document buttons; `.playaudio <selection>` and `.playdoc <selection>` download the selected format. `.video name` searches YouTube and sends the selected video. Search is separate from media downloading, so the configured `MEDIA_DOWNLOAD_API_BASE` provider must also be reachable and compatible.
+
 ### Security and operational notes
 
 - Session credentials and Signal keys are stored in Supabase. Protect backups and restrict database access. Do not run multiple server instances against the same session without implementing distributed locking: concurrent instances can overwrite credentials or defeat deletion safeguards.

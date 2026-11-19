@@ -12,7 +12,6 @@ const pino = require('pino');
 const moment = require('moment-timezone');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const yts = require('yt-search');
 const { createClient } = require('@supabase/supabase-js');
 const { useSupabaseAuthState } = require('./auth-state');
 
@@ -352,91 +351,6 @@ ${FOOTER}`;
           await socket.sendMessage(from, { text: '❌ Error creating sticker' }, { quoted: msg });
         } finally {
           if (tempDir) await fs.remove(tempDir).catch(() => {});
-        }
-        return;
-      }
-
-      // ==================== PLAY COMMAND (MUSIC) ====================
-      if (command === 'play') {
-        const query = args.join(' ');
-        if (!query) {
-          await socket.sendMessage(from, { text: '🎵 *Usage:* .play <song name>' }, { quoted: msg });
-          return;
-        }
-
-        await socket.sendMessage(from, { react: { text: '🎵', key: msg.key } });
-
-        try {
-          const search = await yts(query);
-          if (!search.videos.length) {
-            await socket.sendMessage(from, { text: '❌ No results found!' }, { quoted: msg });
-            return;
-          }
-
-          const video = search.videos[0];
-          const apiUrl = `https://api.dreaded.site/api/ytdl/audio?url=${video.url}`;
-          const { data } = await axios.get(apiUrl);
-
-          if (!data.result?.downloadUrl) {
-            await socket.sendMessage(from, { text: '❌ Failed to get audio' }, { quoted: msg });
-            return;
-          }
-
-          const caption = `🎵 *${video.title}*\n⏱️ Duration: ${video.timestamp}\n👀 Views: ${video.views}\n\n${FOOTER}`;
-
-          await socket.sendMessage(from, {
-            image: { url: video.thumbnail },
-            caption: caption
-          }, { quoted: msg });
-
-          await socket.sendMessage(from, {
-            audio: { url: data.result.downloadUrl },
-            mimetype: 'audio/mpeg',
-            ptt: false
-          }, { quoted: msg });
-
-        } catch (err) {
-          await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
-        }
-        return;
-      }
-
-      // ==================== VIDEO COMMAND ====================
-      if (command === 'video') {
-        const query = args.join(' ');
-        if (!query) {
-          await socket.sendMessage(from, { text: '🎬 *Usage:* .video <video name>' }, { quoted: msg });
-          return;
-        }
-
-        await socket.sendMessage(from, { react: { text: '🎬', key: msg.key } });
-
-        try {
-          const search = await yts(query);
-          if (!search.videos.length) {
-            await socket.sendMessage(from, { text: '❌ No results found!' }, { quoted: msg });
-            return;
-          }
-
-          const video = search.videos[0];
-          const apiUrl = `https://api.dreaded.site/api/ytdl/video?url=${video.url}`;
-          const { data } = await axios.get(apiUrl);
-
-          if (!data.result?.downloadUrl) {
-            await socket.sendMessage(from, { text: '❌ Failed to get video' }, { quoted: msg });
-            return;
-          }
-
-          const caption = `🎬 *${video.title}*\n⏱️ Duration: ${video.timestamp}\n👀 Views: ${video.views}\n\n${FOOTER}`;
-
-          await socket.sendMessage(from, {
-            video: { url: data.result.downloadUrl },
-            caption: caption,
-            mimetype: 'video/mp4'
-          }, { quoted: msg });
-
-        } catch (err) {
-          await socket.sendMessage(from, { text: `❌ Error: ${err.message}` }, { quoted: msg });
         }
         return;
       }
