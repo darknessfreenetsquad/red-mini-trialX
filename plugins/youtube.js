@@ -1,6 +1,7 @@
 'use strict';
 
 const axios = require('axios');
+const { redDragon, cleanFileName } = require('../lib/response-style');
 
 const DOWNLOAD_BASE = process.env.MEDIA_DOWNLOAD_API_BASE || 'https://api.dreaded.site/api/ytdl';
 
@@ -52,7 +53,7 @@ async function sendSearchButtons(ctx, result) {
   const encoded = encodeVideoUrl(result.url);
   await socket.sendMessage(from, {
     image: result.thumbnail ? { url: result.thumbnail } : undefined,
-    caption: `🎵 *${result.title}*\n📺 ${result.channel}\n\nChoose a format:`,
+    caption: redDragon('YOUTUBE AUDIO', [`${result.title}`, `Channel: ${result.channel}`, 'Choose a format below.'], footer),
     footer,
     buttons: [
       { buttonId: `${prefix}playaudio ${encoded}`, buttonText: { displayText: '🎵 Audio' }, type: 1 },
@@ -62,12 +63,12 @@ async function sendSearchButtons(ctx, result) {
 }
 
 module.exports = {
-  commands: ['play', 'playaudio', 'playdoc', 'video'],
+  commands: ['play', 'playaudio', 'playdoc', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'ytmpdoc'],
   searchYouTube,
   async run(ctx) {
     const { socket, from, msg, command, args, prefix, footer } = ctx;
     if (!args.length) {
-      const usage = command === 'video' ? '.video <video name>' : '.play <song name>';
+      const usage = ['video', 'ytv', 'ytmp4'].includes(command) ? `.${command} <video name or YouTube link>` : `.${command} <song name or YouTube link>`;
       await socket.sendMessage(from, { text: `Usage: ${usage}` }, { quoted: msg });
       return;
     }
@@ -80,13 +81,19 @@ module.exports = {
       if (command === 'playaudio' || command === 'playdoc') {
         url = decodeVideoUrl(args[0]);
       } else {
-        result = await searchYouTube(args.join(' '));
-        if (!result) {
-          await socket.sendMessage(from, { text: '❌ No YouTube result found.' }, { quoted: msg });
-          return;
+        const directUrl = args[0];
+        if (['ytmp3', 'ytmp4', 'ytmpdoc'].includes(command) && /^https:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(directUrl)) {
+          url = directUrl;
+          title = 'YouTube download';
+        } else {
+          result = await searchYouTube(args.join(' '));
+          if (!result) {
+            await socket.sendMessage(from, { text: redDragon('YOUTUBE SEARCH', ['No result found.'], footer) }, { quoted: msg });
+            return;
+          }
+          url = result.url;
+          title = result.title;
         }
-        url = result.url;
-        title = result.title;
       }
 
       if (command === 'play') {
@@ -94,26 +101,27 @@ module.exports = {
         return;
       }
 
-      const type = command === 'video' ? 'video' : 'audio';
+      const type = ['video', 'ytv', 'ytmp4'].includes(command) ? 'video' : 'audio';
       const downloadUrl = await download(url, type);
       if (type === 'video') {
         await socket.sendMessage(from, {
           video: { url: downloadUrl },
-          caption: `🎬 *${title}*\n\n${footer}`,
+          caption: redDragon('YOUTUBE VIDEO', [title], footer),
           mimetype: 'video/mp4'
         }, { quoted: msg });
       } else if (command === 'playdoc') {
         await socket.sendMessage(from, {
           document: { url: downloadUrl },
           mimetype: 'audio/mpeg',
-          fileName: `${title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 80)}.mp3`,
-          caption: `📄 *${title}*\n\n${footer}`
+          fileName: `${cleanFileName(title)}.mp3`,
+          caption: redDragon('YOUTUBE AUDIO DOCUMENT', [title], footer)
         }, { quoted: msg });
       } else {
         await socket.sendMessage(from, {
           audio: { url: downloadUrl },
           mimetype: 'audio/mpeg',
-          ptt: false
+          ptt: false,
+          caption: redDragon('YOUTUBE AUDIO', [title], footer)
         }, { quoted: msg });
       }
     } catch (error) {
