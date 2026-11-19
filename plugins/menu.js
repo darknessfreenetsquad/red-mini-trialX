@@ -1,43 +1,53 @@
 'use strict';
 
-const { redDragon } = require('../lib/theme');
+const { loadPlugins } = require('../plugin-loader');
+const { getHeader, getFooter } = require('../lib/theme');
+
+const CATEGORIES = [
+  { icon: '⬇️', name: 'Downloaders', commands: ['download', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw'] },
+  { icon: '🎵', name: 'Music & Audio', commands: ['play', 'play3', 'song2', 'playaudio', 'playdoc', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'ytmpdoc'] },
+  { icon: '🔧', name: 'Tools', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair'] },
+  { icon: '😄', name: 'Fun & Games', commands: ['truth', 'dare', 'rps'] },
+  { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'theme', 'settheme'] },
+  { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
+];
+const BAR = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
+
+function buildMenu(prefix) {
+  const registry = loadPlugins();
+  const available = new Set(registry.keys());
+  available.delete('menu');
+  const assigned = new Set();
+  const sections = [];
+
+  for (const category of CATEGORIES) {
+    const commands = category.commands.filter(command => available.has(command));
+    if (!commands.length) continue;
+    commands.forEach(command => assigned.add(command));
+    sections.push([
+      `╭─「 ${category.icon} ${category.name} 」`,
+      ...commands.map(command => `┃  ⌬ ─· \`${prefix}${command}\``),
+      `╰${BAR}╯`
+    ].join('\n'));
+  }
+
+  const remaining = [...available].filter(command => !assigned.has(command));
+  if (remaining.length) {
+    sections.push([
+      '╭─「 🔧 Other 」',
+      ...remaining.map(command => `┃  ⌬ ─· \`${prefix}${command}\``),
+      `╰${BAR}╯`
+    ].join('\n'));
+  }
+  return [...getHeader(prefix), '', ...sections.join('\n\n').split('\n'), '', ...getFooter(prefix)].join('\n');
+}
 
 module.exports = {
   commands: ['menu'],
+  buildMenu,
   async run(ctx) {
-    const { socket, msg, from, prefix, footer, ownerNumber, botName, getUptime } = ctx;
-    const uptime = getUptime();
-    const hours = Math.floor(uptime / 3600);
-    const minutes = Math.floor((uptime % 3600) / 60);
-    const seconds = Math.floor(uptime % 60);
-    const lines = [
-      `Bot: ${botName}`,
-      `Owner: ${ownerNumber || 'Not configured'}`,
-      `Uptime: ${hours}h ${minutes}m ${seconds}s`,
-      '',
-      'MUSIC',
-      `${prefix}play <song>  |  ${prefix}video <name>`,
-      `${prefix}play3 <song>  |  ${prefix}song2 <song>`,
-      `${prefix}playaudio <selection>  |  ${prefix}playdoc <selection>`,
-      '',
-      'DOWNLOADS',
-      `${prefix}fb <url>  |  ${prefix}instagram <url>`,
-      `${prefix}tiktok <url>  |  ${prefix}twitter <url>`,
-      `${prefix}download <url>`,
-      '',
-      'TOOLS',
-      `${prefix}weather <city>  |  ${prefix}google <query>`,
-      `${prefix}translate <lang> <text>  |  ${prefix}calc <math>`,
-      `${prefix}short <url>  |  ${prefix}jid  |  ${prefix}sticker`,
-      '',
-      'BOT',
-      `${prefix}alive  |  ${prefix}ping  |  ${prefix}profile  |  ${prefix}stats`,
-      `${prefix}theme [name]  |  ${prefix}setting`,
-      '',
-      'GAMES',
-      `${prefix}truth  |  ${prefix}dare  |  ${prefix}rps rock`
-    ];
-    const menuText = redDragon('COMMAND MENU', lines, footer);
+    const { socket, msg, from, prefix } = ctx;
+    const menuText = buildMenu(prefix);
     const buttons = [
       { buttonId: `${prefix}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 },
       { buttonId: `${prefix}ping`, buttonText: { displayText: 'PING' }, type: 1 },
@@ -48,7 +58,7 @@ module.exports = {
 
     await socket.sendMessage(from, { react: { text: '🔴', key: msg.key } });
     try {
-      await socket.sendMessage(from, { text: menuText, footer, buttons }, { quoted: msg });
+      await socket.sendMessage(from, { text: menuText, buttons }, { quoted: msg });
     } catch (error) {
       console.error('Menu buttons failed; sending text fallback:', error.message);
       await socket.sendMessage(from, { text: menuText }, { quoted: msg });

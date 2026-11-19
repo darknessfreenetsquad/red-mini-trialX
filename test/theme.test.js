@@ -21,7 +21,8 @@ after(() => setActiveTheme('silva'));
 test('theme files are available and formatting stays compact', () => {
   assert.deepEqual(listThemes(), ['gold', 'ocean', 'red', 'silva']);
   assert.equal(setActiveTheme('ocean'), true);
-  assert.match(fmt('hello'), /RED DRAGON OCEAN/);
+  assert.match(fmt('hello'), /𝙍𝙀𝘿 𝙓𝙈𝘿/);
+  assert.match(fmt('hello'), /THEME: ocean/);
   assert.ok(!fmt('hello').includes('━━━━━━━━━━━━━━━━━━'));
 });
 
@@ -35,4 +36,3 @@ test('theme command is owner-only and changes the active theme', async () => {
   assert.equal(getActiveThemeName(), 'gold');
   assert.match(owner.socket.sent[0].text, /THEME UPDATED/);
 });
-

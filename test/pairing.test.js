@@ -99,7 +99,7 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   });
   await until(() => socket.sent.some(item => item.message.buttons?.length === 5));
   const menuMessage = socket.sent.find(item => item.message.buttons?.length === 5).message;
-  assert.match(menuMessage.text, /RED DRAGON DFS/);
+  assert.match(menuMessage.text, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
   assert.equal(menuMessage.buttons[0].buttonId, '.alive');
 
   socket.options.auth.creds.registered = true;

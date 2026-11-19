@@ -29,7 +29,7 @@ test('plugin loader exposes migrated non-menu commands', () => {
 
 test('games use compact RedDragon formatting and validate rps', async () => {
   const truth = ctx('truth'); await games.run(truth);
-  assert.match(truth.socket.sent[0].text, /RED DRAGON DFS/);
+  assert.match(truth.socket.sent[0].text, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
   const rps = ctx('rps', ['invalid']); await games.run(rps);
   assert.match(rps.socket.sent[0].text, /Choose: rock/);
 });
@@ -49,7 +49,7 @@ test('social and universal downloader plugins validate URLs and send API media',
     : { data: { result: { hd: 'https://cdn.test/social.mp4' } } };
   const socialCtx = ctx('facebook', ['https://facebook.com/test']); await social.run(socialCtx);
   assert.equal(socialCtx.socket.sent.at(-1).video.url, 'https://cdn.test/social.mp4');
-  assert.match(socialCtx.socket.sent.at(-1).caption, /RED DRAGON DFS/);
+  assert.match(socialCtx.socket.sent.at(-1).caption, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
   const universalCtx = ctx('download', ['https://example.com/test']); await universal.run(universalCtx);
   assert.equal(universalCtx.socket.sent.at(-1).video.url, 'https://cdn.test/all.mp4');
 });
