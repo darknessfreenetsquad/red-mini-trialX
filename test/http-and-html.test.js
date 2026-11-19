@@ -40,29 +40,26 @@ test('frontend pages, redirect and status API are served', async () => {
   assert.equal(response.status, 200);
   const data = await response.json();
   assert.equal(data.status, 'online');
-  assert.equal(data.database, 'not_configured');
+  assert.equal(data.database, 'local');
   assert.equal(data.activeSessions, 0);
   assert.deepEqual(data.sessions, []);
   assert.ok(data.uptime >= 0);
 });
 
-test('pairing validates input and fails safely when database is not configured', async () => {
+test('pairing validates input with local storage', async () => {
   const send = number => request('/code', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number })
   });
   assert.equal((await send('123')).status, 400);
   assert.equal((await send({ bad: 'type' })).status, 400);
-  const unavailable = await send('+27 63 498 8678');
-  assert.equal(unavailable.status, 503);
-  assert.match((await unavailable.json()).error, /not configured/i);
   assert.equal((await request('/code?number=27634988678')).status, 404);
 });
 
-test('pairing and reconnect are public but still validate input and configuration', async () => {
+test('pairing and reconnect are public and use local storage without Supabase', async () => {
   const response = await request('/code/connect-all', { method: 'POST' });
-  assert.equal(response.status, 503);
-  assert.match((await response.json()).error, /supabase/i);
-  const pairResponse = await request('/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: '27634988678' }) });
-  assert.equal(pairResponse.status, 503);
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).attempted, 0);
+  const pairResponse = await request('/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: '123' }) });
+  assert.equal(pairResponse.status, 400);
   assert.equal((await request('/code/token', { method: 'POST' })).status, 404);
 });

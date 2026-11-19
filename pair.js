@@ -14,7 +14,8 @@ const moment = require('moment-timezone');
 const axios = require('axios');
 const cheerio = require('cheerio');
 const { createClient } = require('@supabase/supabase-js');
-const { useSupabaseAuthState } = require('./auth-state');
+const { useFileAuthState, removeFileAuthState, useSupabaseAuthState } = require('./auth-state');
+const localStore = require('./local-store');
 const defaultConfig = require('./config');
 
 const {
@@ -51,18 +52,20 @@ const config = {
   RCD_IMAGE_PATH: BOT_IMAGE
 };
 
-// ========== SUPABASE SETUP ==========
+// ========== STORAGE SETUP ==========
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const storageMode = supabase ? 'supabase' : 'local';
 
-if (!supabase) {
-  console.warn('⚠️ Supabase is not configured; pairing and persisted sessions are disabled.');
-}
+console.log(`Storage backend: ${storageMode}${supabase ? '' : ` (${localStore.DATA_DIR})`}`);
 
-// ========== SUPABASE HELPERS ==========
+// ========== STORAGE HELPERS ==========
 async function removeSessionFromSupabase(number) {
-  if (!supabase) return;
+  if (!supabase) {
+    await localStore.removeNumber(number);
+    return removeFileAuthState(localStore.DATA_DIR, number);
+  }
   const sanitized = number.replace(/[^0-9]/g, '');
   for (const table of ['numbers', 'sessions', 'configs']) {
     const { error } = await supabase.from(table).delete().eq('number', sanitized);
@@ -71,14 +74,14 @@ async function removeSessionFromSupabase(number) {
 }
 
 async function addNumberToSupabase(number) {
-  if (!supabase) return;
+  if (!supabase) return localStore.addNumber(number);
   const sanitized = number.replace(/[^0-9]/g, '');
   const { error } = await supabase.from('numbers').upsert({ number: sanitized });
   if (error) throw new Error(`Unable to save number: ${error.message}`);
 }
 
 async function getAllNumbersFromSupabase() {
-  if (!supabase) return [];
+  if (!supabase) return localStore.listNumbers();
   const { data, error } = await supabase.from('numbers').select('number');
   if (error) throw new Error(`Unable to load sessions: ${error.message}`);
   return data ? data.map(d => d.number) : [];
@@ -90,30 +93,37 @@ async function checked(query, context) {
   return result.data;
 }
 async function loadUserConfigFromSupabase(number) {
-  if (!supabase) return null;
+  if (!supabase) return localStore.getConfig(number);
   const data = await checked(supabase.from('configs').select('config').eq('number', number).maybeSingle(), 'Unable to load config');
   return data?.config || null;
 }
 async function setUserConfigInSupabase(number, configObj) {
+  if (!supabase) return localStore.setConfig(number, configObj);
   await checked(supabase.from('configs').upsert({ number, config: configObj, updated_at: new Date().toISOString() }), 'Unable to save config');
 }
 async function loadAdminsFromSupabase() {
+  if (!supabase) return localStore.listAdmins();
   const data = await checked(supabase.from('admins').select('jid'), 'Unable to load admins');
   return (data || []).map(d => d.jid);
 }
 async function addAdminToSupabase(jid) {
+  if (!supabase) return localStore.addAdmin(jid);
   await checked(supabase.from('admins').upsert({ jid }), 'Unable to add admin');
 }
 async function removeAdminFromSupabase(jid) {
+  if (!supabase) return localStore.removeAdmin(jid);
   await checked(supabase.from('admins').delete().eq('jid', jid), 'Unable to remove admin');
 }
 async function addNewsletterToSupabase(jid, emojis = []) {
+  if (!supabase) return localStore.addNewsletter(jid, emojis);
   await checked(supabase.from('newsletters').upsert({ jid, emojis, added_at: new Date().toISOString() }), 'Unable to add newsletter');
 }
 async function removeNewsletterFromSupabase(jid) {
+  if (!supabase) return localStore.removeNewsletter(jid);
   await checked(supabase.from('newsletters').delete().eq('jid', jid), 'Unable to remove newsletter');
 }
 async function listNewslettersFromSupabase() {
+  if (!supabase) return localStore.listNewsletters();
   const data = await checked(supabase.from('newsletters').select('*'), 'Unable to load newsletters');
   return (data || []).map(d => ({ jid: d.jid, emojis: d.emojis || [] }));
 }
@@ -1021,7 +1031,6 @@ function waitForPairingReady(socket, timeoutMs = 30000) {
   });
 }
 async function EmpirePair(number, requestCode = false) {
-  if (!supabase) throw new Error('Pairing service is not configured');
   if (typeof number !== 'string' || !/^\d{10,15}$/.test(number)) throw new Error('Invalid phone number');
   if (closingSessions.has(number)) await closingSessions.get(number);
   if (revokingSessions.has(number)) throw new Error('Session is being removed');
@@ -1034,7 +1043,9 @@ async function EmpirePair(number, requestCode = false) {
   if (connectingSockets.size + inFlight.size >= 10) throw new Error('Too many pending sessions');
   const operation = (async () => {
     if (requestCode) stoppedSessions.delete(number);
-    const authStore = await useSupabaseAuthState(supabase, number);
+    const authStore = supabase
+      ? await useSupabaseAuthState(supabase, number)
+      : await useFileAuthState(localStore.DATA_DIR, number);
     const { state, saveCreds } = authStore;
     if (!requestCode && !state.creds.registered) return { status: 'pairing_required' };
     const logger = pino({ level: 'fatal' });
@@ -1150,7 +1161,7 @@ function getActiveSessions() {
 }
 
 async function checkDatabase() {
-  if (!supabase) return 'not_configured';
+  if (!supabase) return 'local';
   let timer;
   try {
     const result = await Promise.race([
@@ -1166,7 +1177,6 @@ async function checkDatabase() {
 }
 
 async function startSavedSessions() {
-  if (!supabase) return [];
   const numbers = await getAllNumbersFromSupabase();
   const results = [];
   for (const number of numbers) {
@@ -1191,7 +1201,6 @@ router.post('/', async (req, res) => {
   }
   const number = input.replace(/\D/g, '');
   if (!/^\d{10,15}$/.test(number)) return res.status(400).json({ error: 'Invalid phone number' });
-  if (!supabase) return res.status(503).json({ error: 'Pairing service is not configured' });
   try { return res.json(await EmpirePair(number, true)); }
   catch (err) {
     console.error('Pairing request failed:', err.message);
@@ -1207,7 +1216,6 @@ router.get('/ping', (req, res) => {
 });
 
 router.post('/connect-all', async (req, res) => {
-  if (!supabase) return res.status(503).json({ error: 'Supabase is not configured' });
   try {
     const results = await startSavedSessions();
     res.json({ status: 'success', attempted: results.length, failed: results.filter(r => r.status === 'error').length,
