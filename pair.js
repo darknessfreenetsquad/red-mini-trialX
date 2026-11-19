@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const runFile = promisify(execFile);
 const { loadPlugins } = require('./plugin-loader');
 const commandPlugins = loadPlugins();
+const { fmt, isThemedText } = require('./lib/theme');
 const router = express.Router();
 const pino = require('pino');
 const moment = require('moment-timezone');
@@ -132,7 +133,11 @@ function guardSocketSender(socket, number) {
   const sendMessage = socket.sendMessage.bind(socket);
   socket.sendMessage = async (...args) => {
     try {
-      return await sendMessage(...args);
+      const [jid, rawMessage, options] = args;
+      const message = rawMessage && typeof rawMessage === 'object' ? { ...rawMessage } : rawMessage;
+      if (message && typeof message.text === 'string' && !isThemedText(message.text)) message.text = fmt(message.text);
+      if (message && typeof message.caption === 'string' && !isThemedText(message.caption)) message.caption = fmt(message.caption);
+      return await sendMessage(jid, message, options);
     } catch (error) {
       if (isTransientConnectionError(error)) {
         console.warn(`Skipped message for ${number}: WhatsApp connection is closing`);
@@ -223,6 +228,7 @@ function setupCommandHandlers(socket, sessionNumber) {
           sender,
           senderNumber,
           sessionNumber,
+          isOwner,
           isGroup,
           prefix,
           footer: FOOTER,
