@@ -602,6 +602,19 @@
         let reconnectModal = document.getElementById('reconnectModal');
         let logs = [];
         let autoRefresh;
+        const TOKEN_STORAGE_KEY = 'red-mini-dashboard-token';
+
+        function loadDashboardToken() {
+            const fragment = new URLSearchParams(window.location.hash.slice(1));
+            const sharedToken = fragment.get('token');
+            if (sharedToken) {
+                localStorage.setItem(TOKEN_STORAGE_KEY, sharedToken);
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+            document.getElementById('currentDashboardToken').value = sharedToken || localStorage.getItem(TOKEN_STORAGE_KEY) || '';
+        }
+
+        loadDashboardToken();
 
         function addLog(level, message) {
             const time = new Date().toLocaleTimeString('en-ZA');
@@ -693,7 +706,7 @@
 
         async function confirmReconnect() {
             closeModal();
-            const token = prompt('Enter the dashboard token to reconnect sessions:');
+            const token = localStorage.getItem(TOKEN_STORAGE_KEY) || prompt('Enter the dashboard token to reconnect sessions:');
             if (!token) return;
             addLog('info', 'Initiating reconnect for all sessions...');
             try {
@@ -730,6 +743,7 @@
                 if (!response.ok) throw new Error(data.error || 'Token creation failed');
                 result.textContent = `New token (copy it now): ${data.token}`;
                 if (navigator.clipboard) await navigator.clipboard.writeText(data.token);
+                localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
                 input.value = '';
                 addLog('success', 'New dashboard token created and copied');
             } catch (error) {

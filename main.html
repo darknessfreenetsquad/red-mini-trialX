@@ -290,6 +290,20 @@
         const resultBox = document.getElementById('resultBox');
         const codeDisplay = document.getElementById('codeDisplay');
         const copyBtn = document.getElementById('copyBtn');
+        const TOKEN_STORAGE_KEY = 'red-mini-dashboard-token';
+
+        function loadDashboardToken() {
+            const fragment = new URLSearchParams(window.location.hash.slice(1));
+            const sharedToken = fragment.get('token');
+            const token = sharedToken || localStorage.getItem(TOKEN_STORAGE_KEY) || '';
+            if (sharedToken) {
+                localStorage.setItem(TOKEN_STORAGE_KEY, sharedToken);
+                history.replaceState(null, '', window.location.pathname + window.location.search);
+            }
+            tokenInput.value = token;
+        }
+
+        loadDashboardToken();
 
         async function generateCode() {
             if (pairBtn.disabled) return;
@@ -308,6 +322,7 @@
                 alert('Please enter the dashboard token');
                 return;
             }
+            localStorage.setItem(TOKEN_STORAGE_KEY, tokenInput.value.trim());
 
             pairBtn.disabled = true;
             pairBtn.innerHTML = '<div class="spinner"></div> Requesting code...';
