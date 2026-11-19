@@ -2,6 +2,7 @@ const express = require('express');
 const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 8002;
+const defaultConfig = require('./config');
 const code = require('./pair');
 
 app.disable('x-powered-by');
@@ -18,7 +19,9 @@ app.get('/api/status', async (req, res) => {
     res.set('Cache-Control', 'no-store').json({
         status: 'online',
         botName: process.env.BOT_NAME || 'Red Mini',
-        ownerNumber: /^\d{10,15}$/.test(process.env.OWNER_NUMBER || '') ? process.env.OWNER_NUMBER : null,
+        ownerNumber: /^\d{10,15}$/.test(process.env.OWNER_NUMBER || defaultConfig.OWNER_NUMBER || '')
+            ? (process.env.OWNER_NUMBER || defaultConfig.OWNER_NUMBER)
+            : null,
         newsletter: process.env.NEWSLETTER_JID || '120363427119111004@newsletter',
         uptime: process.uptime(),
         activeSessions: sessions.length,
