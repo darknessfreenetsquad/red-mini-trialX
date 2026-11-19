@@ -4,6 +4,7 @@ const path = require('path');
 const os = require('os');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
+const crypto = require('crypto');
 const runFile = promisify(execFile);
 const { loadPlugins } = require('./plugin-loader');
 const commandPlugins = loadPlugins();
@@ -1148,6 +1149,7 @@ async function startSavedSessions() {
 
 // ========== ROUTES ==========
 const requestCounts = new Map();
+let lastTokenRotation = 0;
 function authorizeDashboard(req, res) {
   res.set('Cache-Control', 'no-store');
   const token = process.env.DASHBOARD_TOKEN;
@@ -1155,7 +1157,6 @@ function authorizeDashboard(req, res) {
     res.status(503).json({ error: 'Set DASHBOARD_TOKEN to enable pairing and reconnect' });
     return false;
   }
-  const crypto = require('crypto');
   const supplied = Buffer.from(req.get('authorization') || '');
   const expected = Buffer.from(`Bearer ${token}`);
   if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
@@ -1164,6 +1165,17 @@ function authorizeDashboard(req, res) {
   }
   return true;
 }
+
+router.post('/token', (req, res) => {
+  if (!authorizeDashboard(req, res)) return;
+  if (Date.now() - lastTokenRotation < 10000) {
+    return res.status(429).json({ error: 'Token was recently changed; wait a few seconds' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  process.env.DASHBOARD_TOKEN = token;
+  lastTokenRotation = Date.now();
+  res.json({ token, message: 'Token rotated. Save this token; it will not be shown again.' });
+});
 
 router.post('/', async (req, res) => {
   if (!authorizeDashboard(req, res)) return;

@@ -23,6 +23,10 @@ test('both HTML documents parse without errors and their inline scripts compile'
     for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
       if (match[1].trim()) assert.doesNotThrow(() => new vm.Script(match[1], { filename: file }));
     }
+    if (file === 'status.html') {
+      assert.match(html, /createDashboardToken/);
+      assert.match(html, /\/code\/token/);
+    }
   }
 });
 
@@ -65,4 +69,23 @@ test('pairing and reconnect require a valid dashboard token', async () => {
   const pairResponse = await request('/code', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number: '27634988678' }) });
   assert.equal(pairResponse.status, 401);
   assert.equal((await request('/code/connect-all')).status, 404);
+});
+
+test('dashboard can rotate its token only with the current token', async () => {
+  const previous = process.env.DASHBOARD_TOKEN;
+  try {
+    const response = await request('/code/token', {
+      method: 'POST', headers: { Authorization: 'Bearer test-dashboard-token' }
+    });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.match(data.token, /^[a-f0-9]{64}$/);
+    assert.equal((await request('/code/token', { method: 'POST', headers: { Authorization: 'Bearer test-dashboard-token' } })).status, 401);
+    const invalidNumber = await request('/code', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${data.token}` }, body: JSON.stringify({ number: 'bad' })
+    });
+    assert.equal(invalidNumber.status, 400);
+  } finally {
+    process.env.DASHBOARD_TOKEN = previous;
+  }
 });

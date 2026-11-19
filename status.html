@@ -346,6 +346,29 @@
             box-shadow: 0 5px 20px rgba(255, 255, 255, 0.1);
         }
 
+        .token-panel { margin-bottom: 40px; }
+        .token-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+        .token-input {
+            flex: 1 1 280px;
+            min-width: 0;
+            background: #090909;
+            color: #fff;
+            border: 1px solid rgba(255, 51, 51, 0.35);
+            border-radius: 10px;
+            padding: 12px;
+            font-family: monospace;
+        }
+        .token-result {
+            display: none;
+            margin-top: 14px;
+            padding: 12px;
+            border-radius: 10px;
+            background: rgba(0, 255, 0, 0.08);
+            color: #9aff9a;
+            word-break: break-all;
+            font-family: monospace;
+        }
+
         /* Footer */
         .footer {
             text-align: center;
@@ -526,6 +549,21 @@
             <button class="action-btn secondary" onclick="reconnectAll()"><i class="fas fa-plug"></i> Reconnect All</button>
         </div>
 
+        <div class="panel token-panel">
+            <div class="panel-header">
+                <div class="panel-title"><i class="fas fa-key"></i> Dashboard Token</div>
+                <div class="panel-badge">Protected</div>
+            </div>
+            <div class="panel-content">
+                <p style="color:#aaa; margin-bottom:12px;">Enter the current token to create a new secure token. The new token replaces the old one and is shown only once.</p>
+                <div class="token-controls">
+                    <input id="currentDashboardToken" class="token-input" type="password" autocomplete="off" placeholder="Current dashboard token">
+                    <button class="action-btn" onclick="createDashboardToken()"><i class="fas fa-plus"></i> Create Token</button>
+                </div>
+                <div id="newDashboardToken" class="token-result"></div>
+            </div>
+        </div>
+
         <div class="panel">
             <div class="panel-header">
                 <div class="panel-title"><i class="fas fa-history"></i> Dashboard Activity</div>
@@ -669,6 +707,34 @@
                 setTimeout(refreshData, 3000);
             } catch (error) {
                 addLog('error', `Reconnect failed: ${error.message}`);
+            }
+        }
+
+        async function createDashboardToken() {
+            const input = document.getElementById('currentDashboardToken');
+            const result = document.getElementById('newDashboardToken');
+            const currentToken = input.value.trim();
+            if (!currentToken) {
+                addLog('warn', 'Enter the current dashboard token first');
+                input.focus();
+                return;
+            }
+            result.style.display = 'block';
+            result.textContent = 'Creating token...';
+            try {
+                const response = await fetch('/code/token', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${currentToken}` }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Token creation failed');
+                result.textContent = `New token (copy it now): ${data.token}`;
+                if (navigator.clipboard) await navigator.clipboard.writeText(data.token);
+                input.value = '';
+                addLog('success', 'New dashboard token created and copied');
+            } catch (error) {
+                result.textContent = `Token creation failed: ${error.message}`;
+                addLog('error', `Token creation failed: ${error.message}`);
             }
         }
 
