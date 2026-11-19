@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Red Mini - Bot Control Center</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -449,14 +449,14 @@
         <div class="header">
             <img src="https://files.catbox.moe/eumprt.jpg" alt="Red Mini" class="logo">
             <h1><i class="fas fa-robot"></i> RED MINI CONTROL CENTER</h1>
-            <div class="subtitle"><i class="fas fa-map-marker-alt"></i> South Africa | <i class="fas fa-shield-alt"></i> Secure Connection</div>
+            <div class="subtitle"><i class="fas fa-map-marker-alt"></i> South Africa | Service dashboard</div>
         </div>
 
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon"><i class="fas fa-circle"></i></div>
                 <div class="stat-value" id="botStatusValue">-</div>
-                <div class="stat-label">Bot Status</div>
+                <div class="stat-label">Web Service</div>
             </div>
             <div class="stat-card">
                 <div class="stat-icon"><i class="fas fa-mobile-alt"></i></div>
@@ -494,15 +494,15 @@
                 <div class="panel-content">
                     <div class="info-row">
                         <span class="info-label"><i class="fab fa-whatsapp"></i> Bot Name</span>
-                        <span class="info-value">Red Mini</span>
+                        <span class="info-value" id="botName">Red Mini</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label"><i class="fas fa-user-cog"></i> Owner</span>
-                        <span class="info-value">27634988678</span>
+                        <span class="info-value" id="ownerNumber">Not configured</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label"><i class="fas fa-newspaper"></i> Newsletter</span>
-                        <span class="info-value">120363427119111004@newsletter</span>
+                        <span class="info-value" id="newsletter">-</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label"><i class="fas fa-globe"></i> Region</span>
@@ -528,7 +528,7 @@
 
         <div class="panel">
             <div class="panel-header">
-                <div class="panel-title"><i class="fas fa-history"></i> System Logs</div>
+                <div class="panel-title"><i class="fas fa-history"></i> Dashboard Activity</div>
                 <div class="panel-badge" id="logCount">0 entries</div>
             </div>
             <div class="panel-content" id="logsContainer" style="max-height: 250px;">
@@ -545,7 +545,7 @@
                 <a href="#"><i class="fab fa-discord"></i></a>
             </div>
             <p>© ʀᴇᴅ ᴅʀᴀɢᴏɴ ᴅғs | All Rights Reserved | South Africa 🇿🇦</p>
-            <p style="font-size: 0.65rem;">Owner: +27 63 498 8678 | Newsletter: 120363427119111004@newsletter</p>
+            <p style="font-size: 0.65rem;">Red Mini Bot</p>
         </div>
     </div>
 
@@ -599,16 +599,19 @@
 
                 if (data.status === 'online') {
                     document.getElementById('botStatusValue').innerHTML = '<span style="color:#00ff00;"><i class="fas fa-circle"></i> ONLINE</span>';
-                    const databaseLabel = data.databaseConfigured ? 'Connected' : 'Not configured';
-                    const databaseColor = data.databaseConfigured ? '#00ff00' : '#ffaa00';
+                    const databaseLabel = data.database === 'connected' ? 'Connected' : data.database === 'not_configured' ? 'Not configured' : 'Unavailable';
+                    const databaseColor = data.database === 'connected' ? '#00ff00' : '#ffaa00';
                     document.getElementById('dbStatus').innerHTML = `<span style="color:${databaseColor};">${databaseLabel}</span>`;
-                    addLog('success', 'Bot is online and responding');
+                    addLog('success', 'Web service is responding');
                 } else {
                     document.getElementById('botStatusValue').innerHTML = '<span style="color:#ff0000;"><i class="fas fa-circle"></i> OFFLINE</span>';
                     addLog('warn', 'Bot status degraded');
                 }
 
                 const sessionsList = document.getElementById('sessionsList');
+                document.getElementById('botName').textContent = data.botName || 'Red Mini';
+                document.getElementById('ownerNumber').textContent = data.ownerNumber || 'Not configured';
+                document.getElementById('newsletter').textContent = data.newsletter || '-';
                 const sessions = data.sessions || [];
                 document.getElementById('sessionCount').innerHTML = data.activeSessions || 0;
                 if (sessions.length > 0) {
@@ -630,7 +633,10 @@
 
             } catch (error) {
                 document.getElementById('botStatusValue').innerHTML = '<span style="color:#ff0000;"><i class="fas fa-circle"></i> OFFLINE</span>';
-                document.getElementById('dbStatus').innerHTML = '<span style="color:#ff0000;">Disconnected</span>';
+                document.getElementById('dbStatus').textContent = 'Unknown';
+                document.getElementById('sessionCount').textContent = '-';
+                document.getElementById('uptimeValue').textContent = '-';
+                document.getElementById('sessionsList').textContent = 'Status unavailable';
                 addLog('error', `Failed to fetch status: ${error.message}`);
             }
         }
@@ -649,11 +655,17 @@
 
         async function confirmReconnect() {
             closeModal();
+            const token = prompt('Enter the dashboard token to reconnect sessions:');
+            if (!token) return;
             addLog('info', 'Initiating reconnect for all sessions...');
             try {
-                const response = await fetch('/code/connect-all');
+                const response = await fetch('/code/connect-all', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await response.json();
-                addLog('success', `Reconnect initiated for ${data.connected?.length || 0} sessions`);
+                if (!response.ok) throw new Error(data.error || 'Reconnect failed');
+                addLog(data.failed || data.pairingRequired ? 'warn' : 'info', `Reconnect requested for ${data.attempted} sessions; ${data.failed} failed, ${data.pairingRequired} need pairing`);
                 setTimeout(refreshData, 3000);
             } catch (error) {
                 addLog('error', `Reconnect failed: ${error.message}`);

@@ -2,70 +2,40 @@ const express = require('express');
 const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 8002;
-
-// Import the pair module
 const code = require('./pair');
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// Routes
+app.disable('x-powered-by');
+app.use(express.json({ limit: '16kb' }));
+app.use(express.urlencoded({ extended: false, limit: '16kb' }));
 app.use('/code', code);
 
-// Status dashboard route
-app.get('/status', (req, res) => {
-    res.sendFile(path.join(__dirname, 'status.html'));
-});
+app.get('/status', (req, res) => res.sendFile(path.join(__dirname, 'status.html')));
+app.get('/pair', (req, res) => res.sendFile(path.join(__dirname, 'main.html')));
 
-// Main pairing page
-app.get('/pair', (req, res) => {
-    res.sendFile(path.join(__dirname, 'main.html'));
-});
-
-// API endpoint to get bot status
 app.get('/api/status', async (req, res) => {
-    try {
-        const { getActiveSessions } = require('./pair');
-        const sessions = getActiveSessions ? getActiveSessions() : [];
-        
-        res.json({
-            status: 'online',
-            botName: process.env.BOT_NAME || 'Red Mini',
-            ownerNumber: process.env.OWNER_NUMBER || '27634988678',
-            newsletter: process.env.NEWSLETTER_JID || '120363427119111004@newsletter',
-            uptime: process.uptime(),
-            activeSessions: sessions.length,
-            sessions,
-            databaseConfigured: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY),
-            timestamp: new Date().toISOString()
-        });
-    } catch (err) {
-        res.json({
-            status: 'degraded',
-            error: err.message,
-            timestamp: new Date().toISOString()
-        });
-    }
+    const sessions = code.getActiveSessions();
+    const database = await code.checkDatabase();
+    res.set('Cache-Control', 'no-store').json({
+        status: 'online',
+        botName: process.env.BOT_NAME || 'Red Mini',
+        ownerNumber: /^\d{10,15}$/.test(process.env.OWNER_NUMBER || '') ? process.env.OWNER_NUMBER : null,
+        newsletter: process.env.NEWSLETTER_JID || '120363427119111004@newsletter',
+        uptime: process.uptime(),
+        activeSessions: sessions.length,
+        // Do not expose complete phone numbers on the public status endpoint.
+        sessions: sessions.map(number => '*'.repeat(Math.max(0, number.length - 4)) + number.slice(-4)),
+        database,
+        timestamp: new Date().toISOString()
+    });
 });
 
-// Home route
-app.get('/', (req, res) => {
-    res.redirect('/status');
-});
+app.get('/', (req, res) => res.redirect('/status'));
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`
-╔══════════════════════════════════════╗
-║      🔴 RED MINI BOT STARTED 🔴       ║
-╠══════════════════════════════════════╣
-║  Port: ${PORT}                              ║
-║  Bot Name: ${process.env.BOT_NAME || 'Red Mini'}     ║
-║  Owner: ${process.env.OWNER_NUMBER || '27634988678'}   ║
-║  Status URL: http://localhost:${PORT}/status ║
-╚══════════════════════════════════════╝
-    `);
-});
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Red Mini listening on port ${PORT}`);
+        code.startSavedSessions().catch(err => console.error('Could not restore sessions:', err.message));
+    });
+}
 
 module.exports = app;

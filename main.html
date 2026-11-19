@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Red Mini - Pair Device</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
@@ -253,9 +253,15 @@
             <div class="subtitle">Connect your WhatsApp number to Red Mini Bot</div>
 
             <div class="input-group">
-                <label><i class="fas fa-phone-alt"></i> WhatsApp Number</label>
-                <input type="tel" id="phoneNumber" placeholder="27634988678">
+                <label for="phoneNumber"><i class="fas fa-phone-alt"></i> WhatsApp Number</label>
+                <input type="tel" id="phoneNumber" placeholder="27634988678" autocomplete="tel">
                 <div style="font-size: 0.65rem; color: #666; margin-top: 5px;"><i class="fas fa-info-circle"></i> Include country code without '+'</div>
+            </div>
+
+            <div class="input-group">
+                <label for="dashboardToken"><i class="fas fa-lock"></i> Dashboard token</label>
+                <input type="password" id="dashboardToken" autocomplete="off" placeholder="Your server's dashboard token">
+                <div style="font-size: 0.65rem; color: #888; margin-top: 5px;">Ask the server administrator for the token. Never share your pairing code.</div>
             </div>
 
             <button class="pair-btn" id="pairBtn"><i class="fas fa-link"></i> Generate Pairing Code</button>
@@ -273,18 +279,20 @@
         </div>
         <div class="footer">
             <p>© ʀᴇᴅ ᴅʀᴀɢᴏɴ ᴅғs | South Africa 🇿🇦</p>
-            <p>Owner: +27 63 498 8678 | Newsletter: 120363427119111004@newsletter</p>
+            <p>Red Mini Bot</p>
         </div>
     </div>
 
     <script>
         const pairBtn = document.getElementById('pairBtn');
         const phoneInput = document.getElementById('phoneNumber');
+        const tokenInput = document.getElementById('dashboardToken');
         const resultBox = document.getElementById('resultBox');
         const codeDisplay = document.getElementById('codeDisplay');
         const copyBtn = document.getElementById('copyBtn');
 
         async function generateCode() {
+            if (pairBtn.disabled) return;
             let number = phoneInput.value.trim();
             if (!number) {
                 alert('Please enter your WhatsApp number');
@@ -292,21 +300,36 @@
             }
 
             number = number.replace(/[^0-9]/g, '');
-            if (number.length < 10) {
+            if (number.length < 10 || number.length > 15) {
                 alert('Please enter a valid number with country code');
+                return;
+            }
+            if (!tokenInput.value) {
+                alert('Please enter the dashboard token');
                 return;
             }
 
             pairBtn.disabled = true;
             pairBtn.innerHTML = '<div class="spinner"></div> Requesting code...';
+            resultBox.classList.remove('show');
 
             try {
-                const response = await fetch(`/code?number=${number}`);
+                const response = await fetch('/code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${tokenInput.value}` },
+                    body: JSON.stringify({ number })
+                });
                 const data = await response.json();
 
-                if (data.code) {
-                    codeDisplay.innerText = data.code;
+                if (!response.ok) {
+                    alert(data.error || 'Failed to get code. Please try again.');
+                } else if (data.code) {
+                    codeDisplay.textContent = data.code;
                     resultBox.classList.add('show');
+                } else if (data.status === 'already_connected') {
+                    alert('This number is already connected.');
+                } else if (data.status === 'connecting') {
+                    alert('This number is already connecting. Please wait.');
                 } else {
                     alert('Failed to get code. Please try again.');
                 }
@@ -319,12 +342,13 @@
         }
 
         copyBtn.addEventListener('click', async () => {
-            const code = codeDisplay.innerText;
-            await navigator.clipboard.writeText(code);
-            copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-            setTimeout(() => {
-                copyBtn.innerHTML = '<i class="far fa-copy"></i> Copy Code';
-            }, 2000);
+            try {
+                await navigator.clipboard.writeText(codeDisplay.textContent);
+                copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => { copyBtn.innerHTML = '<i class="far fa-copy"></i> Copy Code'; }, 2000);
+            } catch (_) {
+                alert('Could not copy the code. Please copy it manually.');
+            }
         });
 
         pairBtn.addEventListener('click', generateCode);

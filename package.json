@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "build": "npm install"
+    "build": "npm run check",
+    "test": "node --test",
+    "check": "node --check index.js && node --check pair.js && node --check auth-state.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
@@ -19,6 +21,14 @@
     "yt-search": "^2.12.1"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "parse5": "^7.3.0"
+  },
+  "overrides": {
+    "redstar": {
+      "minimatch": "^3.1.5"
+    }
   }
 }

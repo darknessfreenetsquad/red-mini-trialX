@@ -2,6 +2,9 @@ const express = require('express');
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const runFile = promisify(execFile);
 const router = express.Router();
 const pino = require('pino');
 const moment = require('moment-timezone');
@@ -9,22 +12,21 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const yts = require('yt-search');
 const { createClient } = require('@supabase/supabase-js');
+const { useSupabaseAuthState } = require('./auth-state');
 
 const {
   default: makeWASocket,
-  useMultiFileAuthState,
   delay,
   getContentType,
   makeCacheableSignalKeyStore,
-  jidNormalizedUser,
   downloadContentFromMessage,
   DisconnectReason
 } = require('@whiskeysockets/baileys');
 
 // ========== CONFIGURATION ==========
-const BOT_NAME = 'Red Mini';
-const OWNER_NUMBER = '27634988678';
-const NEWSLETTER_JID = '120363427119111004@newsletter';
+const BOT_NAME = process.env.BOT_NAME || 'Red Mini';
+const OWNER_NUMBER = /^\d{10,15}$/.test(process.env.OWNER_NUMBER || '') ? process.env.OWNER_NUMBER : null;
+const NEWSLETTER_JID = process.env.NEWSLETTER_JID || '120363427119111004@newsletter';
 const FOOTER = '© ʀᴇᴅ ᴅʀᴀɢᴏɴ ᴅғs';
 const BOT_IMAGE = 'https://files.catbox.moe/eumprt.jpg';
 
@@ -54,88 +56,62 @@ if (!supabase) {
 }
 
 // ========== SUPABASE HELPERS ==========
-async function saveCredsToSupabase(number, creds, keys = null) {
-  if (!supabase) return;
-  const sanitized = number.replace(/[^0-9]/g, '');
-  await supabase.from('sessions').upsert({
-    number: sanitized,
-    creds,
-    keys,
-    updated_at: new Date()
-  });
-}
-
-async function loadCredsFromSupabase(number) {
-  if (!supabase) return null;
-  const sanitized = number.replace(/[^0-9]/g, '');
-  const { data } = await supabase.from('sessions').select('*').eq('number', sanitized).single();
-  return data || null;
-}
-
 async function removeSessionFromSupabase(number) {
   if (!supabase) return;
   const sanitized = number.replace(/[^0-9]/g, '');
-  await supabase.from('sessions').delete().eq('number', sanitized);
-  await supabase.from('numbers').delete().eq('number', sanitized);
+  for (const table of ['numbers', 'sessions', 'configs']) {
+    const { error } = await supabase.from(table).delete().eq('number', sanitized);
+    if (error) throw new Error(`Unable to delete ${table}: ${error.message}`);
+  }
 }
 
 async function addNumberToSupabase(number) {
   if (!supabase) return;
   const sanitized = number.replace(/[^0-9]/g, '');
-  await supabase.from('numbers').upsert({ number: sanitized });
+  const { error } = await supabase.from('numbers').upsert({ number: sanitized });
+  if (error) throw new Error(`Unable to save number: ${error.message}`);
 }
 
 async function getAllNumbersFromSupabase() {
   if (!supabase) return [];
-  const { data } = await supabase.from('numbers').select('number');
+  const { data, error } = await supabase.from('numbers').select('number');
+  if (error) throw new Error(`Unable to load sessions: ${error.message}`);
   return data ? data.map(d => d.number) : [];
 }
 
+async function checked(query, context) {
+  const result = await query;
+  if (result.error) throw new Error(`${context}: ${result.error.message}`);
+  return result.data;
+}
 async function loadUserConfigFromSupabase(number) {
   if (!supabase) return null;
-  const sanitized = number.replace(/[^0-9]/g, '');
-  const { data } = await supabase.from('configs').select('config').eq('number', sanitized).single();
-  return data ? data.config : null;
+  const data = await checked(supabase.from('configs').select('config').eq('number', number).maybeSingle(), 'Unable to load config');
+  return data?.config || null;
 }
-
 async function setUserConfigInSupabase(number, configObj) {
-  if (!supabase) return;
-  const sanitized = number.replace(/[^0-9]/g, '');
-  await supabase.from('configs').upsert({ number: sanitized, config: configObj, updated_at: new Date() });
+  await checked(supabase.from('configs').upsert({ number, config: configObj, updated_at: new Date().toISOString() }), 'Unable to save config');
 }
-
 async function loadAdminsFromSupabase() {
-  if (!supabase) return [];
-  const { data } = await supabase.from('admins').select('jid');
-  return data ? data.map(d => d.jid) : [];
+  const data = await checked(supabase.from('admins').select('jid'), 'Unable to load admins');
+  return (data || []).map(d => d.jid);
 }
-
 async function addAdminToSupabase(jid) {
-  if (!supabase) return;
-  await supabase.from('admins').upsert({ jid });
+  await checked(supabase.from('admins').upsert({ jid }), 'Unable to add admin');
 }
-
 async function removeAdminFromSupabase(jid) {
-  if (!supabase) return;
-  await supabase.from('admins').delete().eq('jid', jid);
+  await checked(supabase.from('admins').delete().eq('jid', jid), 'Unable to remove admin');
 }
-
 async function addNewsletterToSupabase(jid, emojis = []) {
-  if (!supabase) return;
-  await supabase.from('newsletters').upsert({ jid, emojis, added_at: new Date() });
+  await checked(supabase.from('newsletters').upsert({ jid, emojis, added_at: new Date().toISOString() }), 'Unable to add newsletter');
 }
-
 async function removeNewsletterFromSupabase(jid) {
-  if (!supabase) return;
-  await supabase.from('newsletters').delete().eq('jid', jid);
+  await checked(supabase.from('newsletters').delete().eq('jid', jid), 'Unable to remove newsletter');
 }
-
 async function listNewslettersFromSupabase() {
-  if (!supabase) return [];
-  const { data } = await supabase.from('newsletters').select('*');
-  return data ? data.map(d => ({ jid: d.jid, emojis: d.emojis || [] })) : [];
+  const data = await checked(supabase.from('newsletters').select('*'), 'Unable to load newsletters');
+  return (data || []).map(d => ({ jid: d.jid, emojis: d.emojis || [] }));
 }
-
 // ========== UTILS ==========
 function getSouthAfricaTimestamp() {
   return moment().tz('Africa/Johannesburg').format('YYYY-MM-DD HH:mm:ss');
@@ -152,10 +128,14 @@ async function downloadQuotedMedia(quoted) {
   if (!qType) return null;
   const messageType = qType.replace(/Message$/i, '').toLowerCase();
   const stream = await downloadContentFromMessage(quoted[qType], messageType);
-  let buffer = Buffer.from([]);
+  const chunks = [];
+  let size = 0;
   for await (const chunk of stream) {
-    buffer = Buffer.concat([buffer, chunk]);
+    size += chunk.length;
+    if (size > 20 * 1024 * 1024) throw new Error('Media exceeds 20 MB limit');
+    chunks.push(chunk);
   }
+  const buffer = Buffer.concat(chunks);
   return {
     buffer,
     mime: quoted[qType].mimetype || '',
@@ -167,6 +147,12 @@ async function downloadQuotedMedia(quoted) {
 
 // ========== ACTIVE SESSIONS ==========
 const activeSockets = new Map();
+const connectingSockets = new Map();
+const inFlight = new Map();
+const closingSessions = new Map();
+const stoppedSessions = new Set();
+const revokingSessions = new Set();
+const authStores = new WeakMap();
 const socketCreationTime = new Map();
 const otpStore = new Map();
 
@@ -174,7 +160,7 @@ const otpStore = new Map();
 function setupCommandHandlers(socket, sessionNumber) {
   socket.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
-    if (!msg || !msg.message || msg.key.remoteJid === 'status@broadcast') return;
+    if (!msg?.key?.remoteJid || !msg.message || msg.key.remoteJid === 'status@broadcast') return;
 
     const type = getContentType(msg.message);
     let body = '';
@@ -190,7 +176,7 @@ function setupCommandHandlers(socket, sessionNumber) {
 
     const from = msg.key.remoteJid;
     const sender = msg.key.fromMe ? socket.user.id.split(':')[0] + '@s.whatsapp.net' : (msg.key.participant || msg.key.remoteJid);
-    const senderNumber = sender.split('@')[0];
+    const senderNumber = sender.split('@')[0].split(':')[0];
     const isGroup = from.endsWith('@g.us');
     const prefix = config.PREFIX;
     const isCmd = body.startsWith(prefix);
@@ -200,6 +186,10 @@ function setupCommandHandlers(socket, sessionNumber) {
     if (!command) return;
 
     try {
+      const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
+      const mode = userConfig.WORK_TYPE || 'public';
+      const isOwner = senderNumber === sessionNumber || (OWNER_NUMBER && senderNumber === OWNER_NUMBER);
+      if (!isOwner && (mode === 'private' || (mode === 'groups' && !isGroup) || (mode === 'inbox' && isGroup))) return;
       // ==================== MENU COMMAND WITH BUTTONS ====================
       if (command === 'menu') {
         await socket.sendMessage(from, { react: { text: '🔴', key: msg.key } });
@@ -212,7 +202,7 @@ function setupCommandHandlers(socket, sessionNumber) {
         const menuText = `╭───❰ 🔴 RED MINI BOT 🔴 ❱───╮
 │
 │ 🤖 *Name:* Red Mini
-│ 👑 *Owner:* 27634988678
+│ 👑 *Owner:* ${OWNER_NUMBER || 'Not configured'}
 │ ⏱️ *Uptime:* ${hours}h ${minutes}m ${seconds}s
 │ 📡 *Status:* Active
 │ 🇿🇦 *Region:* South Africa
@@ -226,9 +216,7 @@ function setupCommandHandlers(socket, sessionNumber) {
 │ 🎨 ${prefix}sticker
 │ 📸 ${prefix}instagram <url>
 │ 🐦 ${prefix}twitter <url>
-│ 🎵 ${prefix}soundcloud <url>
 │ 📹 ${prefix}tiktok <url>
-│ 📺 ${prefix}youtube <url>
 ╰─────────────────────╯
 
 ╭───❰ 🛠️ TOOLS ❱───╮
@@ -286,7 +274,7 @@ ${FOOTER}`;
         const aliveText = `🔴 *RED MINI IS ONLINE* 🔴
 ━━━━━━━━━━━━━━━━━━
 🤖 *Bot:* Red Mini
-👑 *Owner:* ${OWNER_NUMBER}
+👑 *Owner:* ${OWNER_NUMBER || 'Not configured'}
 ⏱️ *Uptime:* ${hours}h ${minutes}m ${seconds}s
 📡 *Status:* Active
 🇿🇦 *Region:* South Africa
@@ -323,29 +311,21 @@ ${FOOTER}`;
           return;
         }
 
+        let tempDir;
         try {
-          let media = await downloadQuotedMedia(msg.message?.imageMessage ? msg.message : quoted);
-          let buffer = media.buffer;
-          const ran = generateOTP();
-          const pathIn = `./${ran}.${mime.split('/')[1]}`;
-          const pathOut = `./${ran}.webp`;
-
-          fs.writeFileSync(pathIn, buffer);
-
-          const { exec } = require('child_process');
-          const ffmpegCmd = `ffmpeg -i ${pathIn} -vcodec libwebp -filter:v fps=fps=20 -lossless 1 -loop 0 -preset default -an -vsync 0 -s 512:512 ${pathOut}`;
-
-          exec(ffmpegCmd, async (err) => {
-            fs.unlinkSync(pathIn);
-            if (err) {
-              await socket.sendMessage(from, { text: '❌ Failed to create sticker' }, { quoted: msg });
-              return;
-            }
-            await socket.sendMessage(from, { sticker: fs.readFileSync(pathOut) }, { quoted: msg });
-            fs.unlinkSync(pathOut);
-          });
+          const mediaMessage = (msg.message?.imageMessage || msg.message?.videoMessage) ? msg.message : quoted;
+          const media = await downloadQuotedMedia(mediaMessage);
+          if (!media?.buffer) throw new Error('Missing media');
+          tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'red-mini-sticker-'));
+          const input = path.join(tempDir, 'input');
+          const output = path.join(tempDir, 'output.webp');
+          await fs.writeFile(input, media.buffer, { mode: 0o600 });
+          await runFile('ffmpeg', ['-y', '-i', input, '-vcodec', 'libwebp', '-filter:v', 'fps=20', '-lossless', '1', '-loop', '0', '-preset', 'default', '-an', '-s', '512:512', output], { timeout: 30000 });
+          await socket.sendMessage(from, { sticker: await fs.readFile(output) }, { quoted: msg });
         } catch (e) {
           await socket.sendMessage(from, { text: '❌ Error creating sticker' }, { quoted: msg });
+        } finally {
+          if (tempDir) await fs.remove(tempDir).catch(() => {});
         }
         return;
       }
@@ -565,8 +545,12 @@ ${FOOTER}`;
         }
 
         try {
-          const apiKey = '2d61a72574c11c4f36173b627f8cb177';
-          const url = `http://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
+          const apiKey = process.env.OPENWEATHER_API_KEY;
+          if (!apiKey) {
+            await socket.sendMessage(from, { text: '❌ Weather is not configured' }, { quoted: msg });
+            return;
+          }
+          const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
           const { data } = await axios.get(url);
 
           const weatherText = `🌤️ *Weather in ${data.name}, ${data.sys.country}*
@@ -599,7 +583,7 @@ ${FOOTER}`;
         try {
           const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
           const { data } = await axios.get(url);
-          const translated = data[0][0][0];
+          const translated = data[0].map(part => part[0] || '').join('');
 
           await socket.sendMessage(from, {
             text: `📝 *Translation (${lang.toUpperCase()})*\n━━━━━━━━━━━━━━━━━━\n📌 Original: ${text}\n🔄 Translated: ${translated}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
@@ -641,7 +625,7 @@ ${FOOTER}`;
         }
 
         try {
-          const { data } = await axios.get(`https://tinyurl.com/api-create.php?url=${link}`);
+          const { data } = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(link)}`);
           await socket.sendMessage(from, {
             text: `🔗 *URL Shortened*\n━━━━━━━━━━━━━━━━━━\n🔗 Original: ${link}\n📎 Shortened: ${data}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
           }, { quoted: msg });
@@ -691,6 +675,11 @@ ${FOOTER}`;
         }
 
         try {
+          const text = quoted.conversation || quoted.extendedTextMessage?.text;
+          if (text) {
+            await socket.sendMessage(from, { text: `✅ *Saved Status*\n\n${text}` }, { quoted: msg });
+            return;
+          }
           const media = await downloadQuotedMedia(quoted);
           if (!media || !media.buffer) {
             await socket.sendMessage(from, { text: '❌ Failed to download media' }, { quoted: msg });
@@ -717,6 +706,10 @@ ${FOOTER}`;
 
       // ==================== PAIR COMMAND ====================
       if (command === 'pair') {
+        if (isGroup) {
+          await socket.sendMessage(from, { text: '❌ Request pairing codes in a private chat only.' }, { quoted: msg });
+          return;
+        }
         const number = args[0];
         if (!number) {
           await socket.sendMessage(from, { text: '🔐 *Usage:* .pair 27634988678' }, { quoted: msg });
@@ -725,7 +718,9 @@ ${FOOTER}`;
 
         try {
           const cleanNumber = number.replace(/[^0-9]/g, '');
-          const code = await EmpirePair(cleanNumber, { headersSent: false, send() {} });
+          if (senderNumber !== sessionNumber && senderNumber !== OWNER_NUMBER) throw new Error('Permission denied');
+          const result = await EmpirePair(cleanNumber, true);
+          const code = result.code;
           if (!code) throw new Error('Pairing code unavailable');
 
           await socket.sendMessage(from, {
@@ -743,7 +738,7 @@ ${FOOTER}`;
         const profileText = `👤 *Red Mini Bot Profile*
 ━━━━━━━━━━━━━━━━━━
 🤖 *Name:* Red Mini
-👑 *Owner:* ${OWNER_NUMBER}
+👑 *Owner:* ${OWNER_NUMBER || 'Not configured'}
 📢 *Newsletter:* ${NEWSLETTER_JID}
 🔢 *Prefix:* ${prefix}
 🇿🇦 *Region:* South Africa
@@ -801,6 +796,10 @@ ${FOOTER}`;
 
       // ==================== WORK TYPE COMMAND ====================
       if (command === 'wtype') {
+        if (senderNumber !== sessionNumber && senderNumber !== OWNER_NUMBER) {
+          await socket.sendMessage(from, { text: '❌ Permission denied' }, { quoted: msg });
+          return;
+        }
         const type = args[0];
         if (!type || !['public', 'groups', 'inbox', 'private'].includes(type)) {
           await socket.sendMessage(from, { text: '⚙️ *Usage:* .wtype public/groups/inbox/private' }, { quoted: msg });
@@ -858,10 +857,17 @@ ${FOOTER}`;
           return;
         }
 
-        await removeSessionFromSupabase(sessionNumber);
-        await socket.sendMessage(from, { text: '✅ Session deleted successfully' }, { quoted: msg });
-        await socket.logout();
-        activeSockets.delete(sessionNumber);
+        stoppedSessions.add(sessionNumber);
+        revokingSessions.add(sessionNumber);
+        try {
+          await authStores.get(socket)?.waitOpen();
+          await authStores.get(socket)?.stop();
+          try { await socket.logout(); } catch (err) { socket.end?.(err); }
+          activeSockets.delete(sessionNumber);
+          connectingSockets.delete(sessionNumber);
+          await removeSessionFromSupabase(sessionNumber);
+        } finally { revokingSessions.delete(sessionNumber); }
+        await socket.sendMessage(from, { text: '✅ Session deleted successfully' }, { quoted: msg }).catch(() => {});
         return;
       }
 
@@ -979,192 +985,260 @@ async function setupStatusHandlers(socket, sessionNumber) {
 // ========== CALL REJECTION HANDLER ==========
 async function setupCallRejection(socket, sessionNumber) {
   socket.ev.on('call', async (calls) => {
-    const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
-    if (userConfig.ANTI_CALL !== 'on') return;
-
-    for (const call of calls) {
-      if (call.status !== 'offer') continue;
-      await socket.rejectCall(call.id, call.from);
-      await socket.sendMessage(call.from, { text: '🔕 Auto call rejection is enabled.' });
-    }
+    try {
+      const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
+      if (userConfig.ANTI_CALL !== 'on') return;
+      for (const call of calls) {
+        if (call.status !== 'offer') continue;
+        await socket.rejectCall(call.id, call.from);
+        await socket.sendMessage(call.from, { text: '🔕 Auto call rejection is enabled.' });
+      }
+    } catch (err) { console.error('Call handler error:', err.message); }
   });
 }
 
 // ========== NEWSLETTER REACTION HANDLER ==========
-async function setupNewsletterHandlers(socket, sessionNumber) {
+async function setupNewsletterHandlers(socket) {
   socket.ev.on('messages.upsert', async ({ messages }) => {
     const msg = messages[0];
     if (!msg?.key) return;
-    const jid = msg.key.remoteJid;
-
-    const newsletters = await listNewslettersFromSupabase();
-    const isFollowed = newsletters.some(n => n.jid === jid);
-    if (!isFollowed) return;
-
-    const newsletter = newsletters.find(n => n.jid === jid);
-    const emojis = newsletter.emojis.length ? newsletter.emojis : config.AUTO_LIKE_EMOJI;
-    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-
     try {
+      const jid = msg.key.remoteJid;
+      const newsletter = (await listNewslettersFromSupabase()).find(n => n.jid === jid);
+      if (!newsletter) return;
+      const emojis = newsletter.emojis.length ? newsletter.emojis : config.AUTO_LIKE_EMOJI;
+      const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
       await socket.sendMessage(jid, { react: { text: randomEmoji, key: msg.key } });
-    } catch (err) {
-      console.error('Newsletter reaction error:', err);
-    }
+    } catch (err) { console.error('Newsletter reaction error:', err.message); }
   });
 }
 
-// ========== PAIR FUNCTION ==========
-async function EmpirePair(number, res) {
-  const sanitizedNumber = number.replace(/[^0-9]/g, '');
-  const sessionPath = path.join(os.tmpdir(), `session_${sanitizedNumber}`);
-
-  try {
-    const saved = await loadCredsFromSupabase(sanitizedNumber);
-    if (saved?.creds) {
-      fs.ensureDirSync(sessionPath);
-      fs.writeFileSync(path.join(sessionPath, 'creds.json'), JSON.stringify(saved.creds, null, 2));
-    }
-  } catch (e) {}
-
-  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
-  const logger = pino({ level: 'fatal' });
-
-  const socket = makeWASocket({
-    auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
-    printQRInTerminal: false,
-    logger,
-    browser: ['Ubuntu', 'Chrome', '20.0.04']
+// ========== PAIRING AND SESSION LIFECYCLE ==========
+function waitForPairingReady(socket, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => finish(new Error('WhatsApp pairing timed out')), timeoutMs);
+    const finish = err => {
+      clearTimeout(timer);
+      socket.ev.off('connection.update', onUpdate);
+      err ? reject(err) : resolve();
+    };
+    const onUpdate = update => {
+      if (update.qr) finish();
+      else if (update.connection === 'close') finish(new Error('WhatsApp connection closed'));
+    };
+    socket.ev.on('connection.update', onUpdate);
   });
+}
+async function EmpirePair(number, requestCode = false) {
+  if (!supabase) throw new Error('Pairing service is not configured');
+  if (typeof number !== 'string' || !/^\d{10,15}$/.test(number)) throw new Error('Invalid phone number');
+  if (closingSessions.has(number)) await closingSessions.get(number);
+  if (revokingSessions.has(number)) throw new Error('Session is being removed');
+  if (!requestCode && stoppedSessions.has(number)) return { status: 'pairing_required' };
+  if (activeSockets.has(number)) return { status: 'already_connected' };
+  if (inFlight.has(number)) return inFlight.get(number);
+  const existing = connectingSockets.get(number);
+  if (existing) return existing.code ? { code: existing.code } : { status: 'connecting' };
 
-  socketCreationTime.set(sanitizedNumber, Date.now());
+  if (connectingSockets.size + inFlight.size >= 10) throw new Error('Too many pending sessions');
+  const operation = (async () => {
+    if (requestCode) stoppedSessions.delete(number);
+    const authStore = await useSupabaseAuthState(supabase, number);
+    const { state, saveCreds } = authStore;
+    if (!requestCode && !state.creds.registered) return { status: 'pairing_required' };
+    const logger = pino({ level: 'fatal' });
+    const socket = makeWASocket({
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
+      printQRInTerminal: false,
+      logger,
+      browser: ['Ubuntu', 'Chrome', '20.0.04']
+    });
+    const entry = { socket, code: null, timer: null, opening: Promise.resolve() };
+    authStores.set(socket, { ...authStore, waitOpen: () => entry.opening });
+    if (!state.creds.registered) {
+      entry.timer = setTimeout(() => {
+        if (connectingSockets.get(number) === entry) {
+          connectingSockets.delete(number);
+          socket.end?.(new Error('Pairing attempt expired'));
+        }
+      }, config.OTP_EXPIRY);
+      entry.timer.unref?.();
+    }
+    connectingSockets.set(number, entry);
+    socketCreationTime.set(number, Date.now());
 
-  let code;
-  if (!state.creds.registered) {
-    for (let i = 0; i < config.MAX_RETRIES; i++) {
-      try {
-        code = await socket.requestPairingCode(sanitizedNumber);
-        break;
-      } catch (err) {
-        await delay(2000);
+    // Register every handler before requesting a code or returning to the caller.
+    socket.ev.on('creds.update', () => {
+      saveCreds().catch(err => console.error('Failed to save credentials:', err.message));
+    });
+    socket.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+      if (connection === 'open') {
+        if (connectingSockets.get(number) !== entry) return;
+        clearTimeout(entry.timer);
+        connectingSockets.delete(number);
+        activeSockets.set(number, socket);
+        entry.opening = (async () => {
+          try {
+            await addNumberToSupabase(number);
+            await socket.sendMessage(socket.user.id, {
+              image: { url: BOT_IMAGE },
+              caption: `🔴 *Red Mini Bot Activated* 🔴\n✅ Connected: +${number}\n⏱️ Time: ${getSouthAfricaTimestamp()}\n${FOOTER}`
+            });
+          } catch (err) {
+            console.error('Connection setup failed:', err.message);
+          }
+        })();
+        await entry.opening;
+      } else if (connection === 'close') {
+        clearTimeout(entry.timer);
+        if (connectingSockets.get(number) === entry) connectingSockets.delete(number);
+        if (activeSockets.get(number) === socket) activeSockets.delete(number);
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        if (stoppedSessions.has(number)) return;
+        if (statusCode === DisconnectReason.loggedOut) {
+          stoppedSessions.add(number);
+          revokingSessions.add(number);
+          try { await entry.opening; await authStore.stop(); await removeSessionFromSupabase(number); }
+          catch (err) { console.error('Could not remove logged-out session:', err.message); }
+          finally { revokingSessions.delete(number); }
+        } else if (state.creds.registered) {
+          const closing = authStore.flush();
+          closingSessions.set(number, closing);
+          try { await closing; }
+          catch (err) { console.error('Cannot reconnect without saved credentials:', err.message); return; }
+          finally { if (closingSessions.get(number) === closing) closingSessions.delete(number); }
+          const timer = setTimeout(() => {
+            if (!stoppedSessions.has(number)) EmpirePair(number).catch(err => console.error('Reconnect failed:', err.message));
+          }, 3000);
+          timer.unref?.();
+        }
       }
+    });
+    setupCommandHandlers(socket, number);
+    setupStatusHandlers(socket, number);
+    setupCallRejection(socket, number);
+    setupNewsletterHandlers(socket, number);
+
+    if (state.creds.registered) return { status: 'connecting' };
+    try {
+      await waitForPairingReady(socket);
+      let lastError;
+      for (let i = 0; i < config.MAX_RETRIES; i++) {
+        try {
+          // This Baileys fork defaults to a fixed code unless null is passed.
+          entry.code = await socket.requestPairingCode(number, null);
+          if (!entry.code) throw new Error('No pairing code returned');
+          await authStore.flush();
+          return { code: entry.code };
+        } catch (err) {
+          lastError = err;
+          if (i + 1 < config.MAX_RETRIES) await delay(2000);
+        }
+      }
+      throw lastError || new Error('Unable to request pairing code');
+    } catch (err) {
+      clearTimeout(entry.timer);
+      if (connectingSockets.get(number) === entry) connectingSockets.delete(number);
+      socket.end?.(err);
+      throw err;
     }
-    if (!res.headersSent) res.send({ code });
-  }
-
-  return code;
-
-  socket.ev.on('creds.update', async () => {
-    await saveCreds();
-    const credsPath = path.join(sessionPath, 'creds.json');
-    if (fs.existsSync(credsPath)) {
-      const credsObj = JSON.parse(fs.readFileSync(credsPath, 'utf8'));
-      await saveCredsToSupabase(sanitizedNumber, credsObj, state.keys);
-    }
-  });
-
-  socket.ev.on('connection.update', async (update) => {
-    const { connection } = update;
-    if (connection === 'open') {
-      activeSockets.set(sanitizedNumber, socket);
-      await addNumberToSupabase(sanitizedNumber);
-
-      const userJid = socket.user.id;
-      await socket.sendMessage(userJid, {
-        image: { url: BOT_IMAGE },
-        caption: `🔴 *Red Mini Bot Activated* 🔴\n━━━━━━━━━━━━━━━━━━\n✅ Connected: +${sanitizedNumber}\n📡 Status: Active\n🇿🇦 Region: South Africa\n⏱️ Time: ${getSouthAfricaTimestamp()}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
-      });
-    }
-    if (connection === 'close') {
-      activeSockets.delete(sanitizedNumber);
-    }
-  });
-
-  setupCommandHandlers(socket, sanitizedNumber);
-  setupStatusHandlers(socket, sanitizedNumber);
-  setupCallRejection(socket, sanitizedNumber);
-  setupNewsletterHandlers(socket, sanitizedNumber);
-
-  activeSockets.set(sanitizedNumber, socket);
+  })();
+  inFlight.set(number, operation);
+  try { return await operation; } finally { inFlight.delete(number); }
 }
-
-// ========== ROUTES ==========
-router.get('/', async (req, res) => {
-  const { number } = req.query;
-  if (!number) return res.status(400).json({ error: 'Number required' });
-  if (!supabase) {
-    return res.status(503).json({ error: 'Pairing service is not configured' });
-  }
-  const sanitized = number.replace(/[^0-9]/g, '');
-  if (!/^\d{10,15}$/.test(sanitized)) {
-    return res.status(400).json({ error: 'Invalid phone number' });
-  }
-  if (activeSockets.has(sanitized)) {
-    return res.status(200).json({ status: 'already_connected' });
-  }
-  await EmpirePair(number, res);
-});
-
-router.get('/active', (req, res) => {
-  res.json({
-    botName: BOT_NAME,
-    count: activeSockets.size,
-    numbers: Array.from(activeSockets.keys()),
-    timestamp: getSouthAfricaTimestamp()
-  });
-});
-
-router.get('/ping', (req, res) => {
-  res.json({ status: 'active', botName: BOT_NAME, sessions: activeSockets.size });
-});
-
-router.get('/connect-all', async (req, res) => {
-  const numbers = await getAllNumbersFromSupabase();
-  for (const num of numbers) {
-    if (!activeSockets.has(num)) {
-      const mockRes = { headersSent: false, send: () => {}, status: () => mockRes };
-      await EmpirePair(num, mockRes);
-      await delay(1000);
-    }
-  }
-  res.json({ status: 'success', connected: Array.from(activeSockets.keys()) });
-});
-
-// ========== INIT SUPABASE TABLES ==========
-async function initTables() {
-  if (!supabase) return;
-  const createTables = `
-  CREATE TABLE IF NOT EXISTS sessions (number TEXT PRIMARY KEY, creds JSONB NOT NULL, keys JSONB, updated_at TIMESTAMP DEFAULT NOW());
-  CREATE TABLE IF NOT EXISTS numbers (number TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT NOW());
-  CREATE TABLE IF NOT EXISTS configs (number TEXT PRIMARY KEY, config JSONB NOT NULL, updated_at TIMESTAMP DEFAULT NOW());
-  CREATE TABLE IF NOT EXISTS admins (jid TEXT PRIMARY KEY);
-  CREATE TABLE IF NOT EXISTS newsletters (jid TEXT PRIMARY KEY, emojis TEXT[] DEFAULT '{}', added_at TIMESTAMP DEFAULT NOW());
-  `;
-
-  try {
-    await supabase.rpc('exec_sql', { query: createTables });
-    console.log('✅ Tables ready');
-  } catch (err) {
-    console.log('⚠️ Tables may already exist');
-  }
-}
-
-initTables();
-
-// ========== AUTO RESTART SESSIONS ==========
-(async () => {
-  const numbers = await getAllNumbersFromSupabase();
-  for (const num of numbers) {
-    if (!activeSockets.has(num)) {
-      const mockRes = { headersSent: false, send: () => {}, status: () => mockRes };
-      await EmpirePair(num, mockRes);
-      await delay(2000);
-    }
-  }
-})();
 
 function getActiveSessions() {
   return Array.from(activeSockets.keys());
 }
 
+async function checkDatabase() {
+  if (!supabase) return 'not_configured';
+  let timer;
+  try {
+    const result = await Promise.race([
+      supabase.from('numbers').select('number').limit(1),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Database timeout')), 4000); })
+    ]);
+    return result.error ? 'unavailable' : 'connected';
+  } catch (_) {
+    return 'unavailable';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function startSavedSessions() {
+  if (!supabase) return [];
+  const numbers = await getAllNumbersFromSupabase();
+  const results = [];
+  for (const number of numbers) {
+    try { results.push({ number, ...(await EmpirePair(number)) }); }
+    catch (err) { console.error(`Could not start saved session: ${err.message}`); results.push({ number, status: 'error' }); }
+  }
+  return results;
+}
+
+// ========== ROUTES ==========
+const requestCounts = new Map();
+function authorizeDashboard(req, res) {
+  res.set('Cache-Control', 'no-store');
+  const token = process.env.DASHBOARD_TOKEN;
+  if (!token) {
+    res.status(503).json({ error: 'Set DASHBOARD_TOKEN to enable pairing and reconnect' });
+    return false;
+  }
+  const crypto = require('crypto');
+  const supplied = Buffer.from(req.get('authorization') || '');
+  const expected = Buffer.from(`Bearer ${token}`);
+  if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied, expected)) {
+    res.status(401).json({ error: 'Invalid dashboard token' });
+    return false;
+  }
+  return true;
+}
+
+router.post('/', async (req, res) => {
+  if (!authorizeDashboard(req, res)) return;
+  const now = Date.now();
+  for (const [ip, entry] of requestCounts) if (entry.expires <= now) requestCounts.delete(ip);
+  const entry = requestCounts.get(req.ip) || { count: 0, expires: now + 60000 };
+  if (++entry.count > 20) return res.status(429).json({ error: 'Too many requests; try again later' });
+  requestCounts.set(req.ip, entry);
+  const input = req.body?.number;
+  if (typeof input !== 'string' || !/^[+\d\s()-]+$/.test(input)) {
+    return res.status(400).json({ error: 'Enter a phone number with its country code' });
+  }
+  const number = input.replace(/\D/g, '');
+  if (!/^\d{10,15}$/.test(number)) return res.status(400).json({ error: 'Invalid phone number' });
+  if (!supabase) return res.status(503).json({ error: 'Pairing service is not configured' });
+  try { return res.json(await EmpirePair(number, true)); }
+  catch (err) {
+    console.error('Pairing request failed:', err.message);
+    return res.status(502).json({ error: 'Unable to generate a pairing code. Please try again.' });
+  }
+});
+
+router.get('/active', (req, res) => {
+  res.json({ botName: BOT_NAME, count: activeSockets.size, timestamp: getSouthAfricaTimestamp() });
+});
+router.get('/ping', (req, res) => {
+  res.json({ status: 'active', botName: BOT_NAME, sessions: activeSockets.size });
+});
+
+router.post('/connect-all', async (req, res) => {
+  if (!authorizeDashboard(req, res)) return;
+  if (!supabase) return res.status(503).json({ error: 'Supabase is not configured' });
+  try {
+    const results = await startSavedSessions();
+    res.json({ status: 'success', attempted: results.length, failed: results.filter(r => r.status === 'error').length,
+      pairingRequired: results.filter(r => r.status === 'pairing_required').length });
+  } catch (err) {
+    console.error('Reconnect request failed:', err.message);
+    res.status(502).json({ error: 'Unable to load saved sessions' });
+  }
+});
+
 module.exports = router;
 module.exports.getActiveSessions = getActiveSessions;
+module.exports.checkDatabase = checkDatabase;
+module.exports.startSavedSessions = startSavedSessions;
