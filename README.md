@@ -44,7 +44,7 @@ Group administrators can use `.kick`, `.kickall`, `.mute`, `.open`, and `.adddes
 
 Automatic status viewing is enabled by default. The owner can run `.statusview` to inspect it, `.statusview on` or `.statusview off` to toggle viewing, `.statusview like on|off` to control reactions, and `.statusview emojis ❤️ 💗 🔥 🥰` to set the reaction list. The bot uses `❤️`, `💗`, `🔥`, and `🥰` by default.
 
-Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red` and `ocean`. The owner can run `.theme` to list text themes and `.theme <name>` to switch the active response theme. Use `.imagetheme` for the artwork themes shown on menu, ping, welcome, and alive responses. Outgoing text and media captions use the compact RedDragon formatter.
+Image themes are stored in [`image-themes.json`](image-themes.json). The owner can run `.imagetheme` to list them or `.imagetheme <name>` to switch the artwork used for menu, ping, welcome, and alive responses. Image theme selection is the only theme system; outgoing text and media captions use the fixed compact RedDragon formatter.
 
 ## HTTP endpoints
 

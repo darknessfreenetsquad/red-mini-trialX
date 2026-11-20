@@ -10,7 +10,7 @@ const CATEGORIES = [
   { icon: '🔧', name: 'Tools', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'tgstickers', 'update'] },
   { icon: '😄', name: 'Fun & Games', commands: ['truth', 'dare', 'rps'] },
   { icon: '👥', name: 'Group', commands: ['kick', 'kickall', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel'] },
-  { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'theme', 'settheme', 'imagetheme', 'setimage', 'statusview'] },
+  { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'imagetheme', 'setimage', 'statusview'] },
   { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
 ];
 const BAR = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
@@ -56,7 +56,7 @@ module.exports = {
       { buttonId: `${prefix}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 },
       { buttonId: `${prefix}ping`, buttonText: { displayText: 'PING' }, type: 1 },
       { buttonId: `${prefix}music`, buttonText: { displayText: 'MUSIC FALLBACK' }, type: 1 },
-      { buttonId: `${prefix}theme`, buttonText: { displayText: 'THEMES' }, type: 1 },
+      { buttonId: `${prefix}imagetheme`, buttonText: { displayText: 'IMAGE THEMES' }, type: 1 },
       { buttonId: `${prefix}rps rock`, buttonText: { displayText: 'RPS' }, type: 1 }
     ];
 

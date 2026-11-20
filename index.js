@@ -13,7 +13,7 @@ const COMMAND_GROUPS = [
     { name: 'Tools', icon: '🔧', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'tgstickers', 'update'] },
     { name: 'Fun & Games', icon: '😄', commands: ['truth', 'dare', 'rps'] },
     { name: 'Group', icon: '👥', commands: ['kick', 'kickall', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel'] },
-    { name: 'Bot Info', icon: '📊', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'theme', 'settheme', 'imagetheme', 'setimage', 'statusview'] },
+    { name: 'Bot Info', icon: '📊', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'imagetheme', 'setimage', 'statusview'] },
     { name: 'Owner', icon: '👑', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
 ];
 
