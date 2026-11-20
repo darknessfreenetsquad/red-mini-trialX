@@ -10,7 +10,13 @@ const omega = require('../plugins/omega');
 const { loadPlugins } = require('../plugin-loader');
 
 const originalGet = axios.get;
-after(() => { axios.get = originalGet; });
+const originalSearchYouTube = omega.searchYouTube;
+const originalDownloadPlayAudio = omega.downloadPlayAudio;
+after(() => {
+  axios.get = originalGet;
+  omega.searchYouTube = originalSearchYouTube;
+  omega.downloadPlayAudio = originalDownloadPlayAudio;
+});
 
 function ctx(command, args = []) {
   return {
@@ -93,18 +99,27 @@ test('Omegatech commands map search, trending, anime, and YouTube metadata safel
   assert.match(youtube.socket.sent.at(-1).text, /Test video/);
 });
 
-test('Omegatech play searches YouTube Music and sends the returned audio stream', async () => {
+test('play reports missing queries and empty YouTube results in Red Dragon text', async () => {
+  const missing = ctx('play');
+  await omega.run(missing);
+  assert.match(missing.socket.sent.at(-1).text, /What song do you want to download/);
+
+  omega.searchYouTube = async () => ({ videos: [] });
+  const empty = ctx('play', ['unknown song']);
+  await omega.run(empty);
+  assert.match(empty.socket.sent.at(-1).text, /No songs found/);
+  assert.match(empty.socket.sent.at(-1).text, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
+});
+
+test('play searches YouTube, calls Keith MP3, and sanitizes the returned filename', async () => {
   const calls = [];
-  axios.get = async (url, options) => {
-    calls.push({ url, options });
-    assert.match(url, /api\.omegatech\.app\/api\/download\/play/);
-    assert.equal(options.timeout, 15000);
-    if (options.params.action === 'search') {
-      return { data: { success: true, data: { query: 'Alan Walker', songs: [{ videoId: 'music-123', title: 'Test Song', artist: 'Test Artist', url: 'https://music.youtube.com/watch?v=music-123' }] } } };
-    }
-    assert.equal(options.params.action, 'play');
-    assert.equal(options.params.videoId, 'music-123');
-    return { data: { success: true, data: { videoId: 'music-123', title: 'Test Song', artist: 'Test Artist', streams: [{ format: 'mp3', url: 'https://cdn.test/test-song.mp3' }] } } };
+  omega.searchYouTube = async query => {
+    assert.equal(query, 'Alan Walker');
+    return { videos: [{ title: 'Search result', url: 'https://www.youtube.com/watch?v=music-123' }] };
+  };
+  omega.downloadPlayAudio = async url => {
+    calls.push(url);
+    return { title: 'Song: Test/Unsafe?', downloadUrl: 'https://cdn.test/test-song.mp3' };
   };
 
   const play = ctx('play', ['Alan', 'Walker']);
@@ -112,30 +127,23 @@ test('Omegatech play searches YouTube Music and sends the returned audio stream'
   const message = play.socket.sent.at(-1);
   assert.equal(message.audio.url, 'https://cdn.test/test-song.mp3');
   assert.equal(message.mimetype, 'audio/mpeg');
-  assert.match(message.caption, /Test Song/);
-  assert.deepEqual(calls.map(call => call.options.params.action), ['search', 'play']);
+  assert.equal(message.fileName, 'Song_ Test_Unsafe_.mp3');
+  assert.deepEqual(calls, ['https://www.youtube.com/watch?v=music-123']);
 });
 
-test('Omegatech play falls back to the existing YouTube audio endpoint when conversion is unavailable', async () => {
-  const calls = [];
-  axios.get = async (url, options) => {
-    calls.push({ url, options });
-    assert.equal(options.timeout, 15000);
-    if (url.endsWith('/download/play') && options.params.action === 'play') {
-      return { data: { success: true, data: { title: 'Fallback Song', streams: [] } } };
-    }
-    if (url.endsWith('/download/play') && options.params.action === 'download') {
-      return { data: { success: false, error: 'audio_conversion_failed_for_all_formats' } };
-    }
-    assert.match(url, /\/download\/YouTube$/);
-    assert.equal(options.params.type, 'audio');
-    assert.match(options.params.url, /youtube\.com\/watch\?v=music-456/);
-    return { data: { success: true, data: { title: 'Fallback Song', audio: { mp3: { downloadUrl: 'https://cdn.test/fallback.mp3' } } } } };
+test('play reports invalid Keith responses and download failures', async () => {
+  omega.searchYouTube = async () => ({ videos: [{ url: 'https://youtu.be/music-789' }] });
+  omega.downloadPlayAudio = async () => {
+    throw new Error('Failed to fetch audio from the API. Please try again later.');
   };
+  const invalid = ctx('play', ['invalid']);
+  await omega.run(invalid);
+  assert.match(invalid.socket.sent.at(-1).text, /Failed to fetch audio from the API/);
 
-  const result = await omega.playSong('music-456');
-  assert.equal(result.audioUrl, 'https://cdn.test/fallback.mp3');
-  assert.deepEqual(calls.map(call => new URL(call.url).pathname), ['/api/download/play', '/api/download/play', '/api/download/YouTube']);
+  omega.downloadPlayAudio = async () => { throw new Error('timeout'); };
+  const failed = ctx('play', ['timeout']);
+  await omega.run(failed);
+  assert.match(failed.socket.sent.at(-1).text, /Download failed/);
 });
 
 test('Omegatech YouTube video command enforces the 50 MB limit', async () => {

@@ -1,12 +1,12 @@
 'use strict';
 
+const yts = require('yt-search');
 const axios = require('axios');
-const { redDragon } = require('../lib/response-style');
+const { redDragon, cleanFileName } = require('../lib/response-style');
 
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
-const PLAY_ROUTE = '/download/play';
 
 function clean(value, fallback = 'Unknown') {
   return String(value ?? fallback).replace(/[\r\n]+/g, ' ').trim();
@@ -68,40 +68,6 @@ function formatCeenaija(data) {
   ];
 }
 
-function videoIdFromSong(song) {
-  const direct = String(song?.videoId || '').trim();
-  if (direct) return direct;
-  const match = String(song?.url || '').match(/[?&]v=([^&]+)/i);
-  return match?.[1] || null;
-}
-
-function extractAudioUrl(data) {
-  const streams = Array.isArray(data?.streams) ? data.streams : [];
-  const streamUrls = streams.flatMap(stream => {
-    if (typeof stream === 'string') return [stream];
-    return [stream?.downloadUrl, stream?.streamUrl, stream?.url];
-  });
-  const candidates = [
-    data?.audio?.mp3?.downloadUrl,
-    data?.audio?.mp3?.url,
-    data?.audio?.m4a?.downloadUrl,
-    data?.audio?.m4a?.url,
-    data?.downloadUrl,
-    data?.audioUrl,
-    ...streamUrls
-  ];
-  return candidates.find(value => /^https?:\/\//i.test(String(value || ''))) || null;
-}
-
-function playSearchLines(data) {
-  const songs = Array.isArray(data?.songs) ? data.songs.slice(0, 5) : [];
-  if (!songs.length) return ['No playable songs were found.'];
-  return [
-    `Results for: ${clean(data.query || '')}`,
-    ...songs.map((song, index) => `${index + 1}. ${clean(song.title)} — ${clean(song.artist)}${song.url ? `\n   ${song.url}` : ''}`)
-  ];
-}
-
 function formatAnime(data) {
   const items = Array.isArray(data.results) ? data.results.slice(0, 10) : [];
   if (!items.length) return ['No anime results were returned.'];
@@ -143,40 +109,19 @@ async function searchSong(query) {
   return get('/Search/searchthatsong', { action: 'search', query });
 }
 
-async function searchPlay(query) {
-  return get(PLAY_ROUTE, { action: 'search', query });
+async function searchYouTube(query) {
+  return yts(query);
 }
 
-async function playSong(videoId) {
-  let metadata = null;
-  let lastError = null;
-  try {
-    metadata = await get(PLAY_ROUTE, { action: 'play', videoId });
-    const audioUrl = extractAudioUrl(metadata);
-    if (audioUrl) return { metadata, audioUrl };
-  } catch (error) {
-    lastError = error;
+async function downloadPlayAudio(url) {
+  const { data } = await axios.get('https://apis-keith.vercel.app/download/dlmp3', {
+    timeout: REQUEST_TIMEOUT,
+    params: { url }
+  });
+  if (!data?.status || !data?.result || !data.result.downloadUrl) {
+    throw new Error('Failed to fetch audio from the API. Please try again later.');
   }
-
-  try {
-    const downloaded = await get(PLAY_ROUTE, { action: 'download', videoId, format: 'mp3' });
-    const audioUrl = extractAudioUrl(downloaded);
-    if (audioUrl) return { metadata: { ...(metadata || {}), ...downloaded }, audioUrl };
-    lastError = new Error('The audio service returned no stream URL.');
-  } catch (error) {
-    lastError = error;
-  }
-
-  try {
-    const fallback = await youtubeDownload(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`, 'audio');
-    const audioUrl = extractAudioUrl(fallback);
-    if (audioUrl) return { metadata: { ...(metadata || {}), ...fallback }, audioUrl };
-    lastError = new Error('The fallback audio service returned no stream URL.');
-  } catch (error) {
-    lastError = error;
-  }
-
-  return { metadata, audioUrl: null, error: lastError };
+  return data.result;
 }
 
 async function trendingSongs() {
@@ -197,11 +142,9 @@ async function youtubeDownload(url, type = 'video') {
 
 module.exports = {
   commands: ['play', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'ytdl', 'ytvideo', 'ytaudio'],
-  PLAY_ROUTE,
   searchSong,
-  searchPlay,
-  playSong,
-  extractAudioUrl,
+  searchYouTube,
+  downloadPlayAudio,
   trendingSongs,
   searchCeenaija,
   searchAnime,
@@ -215,39 +158,45 @@ module.exports = {
     }
     try {
       if (command === 'play') {
-        const query = requireText(args, '.play <song or artist>');
-        const search = await searchPlay(query);
-        const song = (Array.isArray(search.songs) ? search.songs : []).find(item => videoIdFromSong(item));
-        if (!song) {
-          await socket.sendMessage(from, { text: redDragon('PLAY SEARCH', playSearchLines(search), footer) }, { quoted: msg });
+        const query = args.join(' ').trim().slice(0, 300);
+        if (!query) {
+          await socket.sendMessage(from, { text: redDragon('PLAY', ['What song do you want to download?'], footer) }, { quoted: msg });
           return;
         }
 
-        const videoId = videoIdFromSong(song);
-        const result = await playSong(videoId);
-        if (!result.audioUrl) {
-          const fallback = [
-            `Song: ${clean(song.title)}`,
-            `Artist: ${clean(song.artist)}`,
-            song.url ? `Open: ${song.url}` : '',
-            'Audio is unavailable from the provider right now. Try .play again shortly.',
-            result.error?.message || ''
-          ].filter(Boolean);
-          await socket.sendMessage(from, { text: redDragon('PLAY LINK', fallback, footer) }, { quoted: msg });
+        let search;
+        try {
+          search = await module.exports.searchYouTube(query);
+        } catch (error) {
+          await socket.sendMessage(from, { text: redDragon('PLAY ERROR', ['YouTube search failed. Please try again later.'], footer) }, { quoted: msg });
           return;
         }
 
-        const title = clean(result.metadata?.title || song.title);
-        const artist = clean(result.metadata?.artist || song.artist);
+        const video = Array.isArray(search?.videos) ? search.videos[0] : null;
+        if (!video?.url) {
+          await socket.sendMessage(from, { text: redDragon('PLAY SEARCH', ['No songs found!'], footer) }, { quoted: msg });
+          return;
+        }
+
+        await socket.sendMessage(from, { text: redDragon('PLAY', ['Please wait, your download is in progress.'], footer) }, { quoted: msg });
+
+        let result;
+        try {
+          result = await module.exports.downloadPlayAudio(video.url);
+        } catch (error) {
+          const message = error.message === 'Failed to fetch audio from the API. Please try again later.'
+            ? error.message
+            : 'Download failed. Please try again later.';
+          await socket.sendMessage(from, { text: redDragon('PLAY ERROR', [message], footer) }, { quoted: msg });
+          return;
+        }
+
+        const title = clean(result.title || video.title, 'red-dragon-play');
+        const fileName = cleanFileName(`${title}.mp3`, 'red-dragon-play.mp3');
         await socket.sendMessage(from, {
-          audio: { url: result.audioUrl },
+          audio: { url: result.downloadUrl },
           mimetype: 'audio/mpeg',
-          ptt: false,
-          caption: redDragon('PLAY', [
-            `Song: ${title}`,
-            `Artist: ${artist}`,
-            'Temporary provider URL; not stored by the bot.'
-          ], footer)
+          fileName
         }, { quoted: msg });
         return;
       }
