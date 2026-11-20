@@ -44,6 +44,8 @@ Group administrators can use `.kick`, `.kickall`, `.mute`, `.open`, and `.adddes
 
 Automatic status viewing is enabled by default. The owner can run `.statusview` to inspect it, `.statusview on` or `.statusview off` to toggle viewing, `.statusview like on|off` to control reactions, and `.statusview emojis ❤️ 💗 🔥 🥰` to set the reaction list. The bot uses `❤️`, `💗`, `🔥`, and `🥰` by default.
 
+Movie search is available with `.movie <title>` or `.movies <title>` when `TMDB_API_KEY` is configured. Searches run in a bounded background queue with short timeouts and five-minute caching, so they do not block other commands. Results include official TMDB title pages; the bot does not download large or unauthorized movie files.
+
 Image themes are stored in [`image-themes.json`](image-themes.json). The owner can run `.imagetheme` to list them or `.imagetheme <name>` to switch the artwork used for menu, ping, welcome, and alive responses. Image theme selection is the only theme system; outgoing text and media captions use the fixed compact RedDragon formatter.
 
 ## HTTP endpoints
