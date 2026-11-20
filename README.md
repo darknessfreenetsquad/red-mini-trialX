@@ -36,7 +36,7 @@ Supabase remains supported for operators who need shared persistence across inst
 
 ## Configuration
 
-Set `OWNER_NUMBER` to an international phone number with digits only if you want instance-wide owner commands. Set `YOUTUBE_API_KEY` for official YouTube search used by `.play` and `.video`; set `MEDIA_DOWNLOAD_API_BASE` if using a compatible media resolver. `ffmpeg` is required by sticker features when enabled.
+Set `OWNER_NUMBER` to an international phone number with digits only if you want instance-wide owner commands. Set `IMAGE_THEME=Redragon` to choose the default menu, ping, and welcome artwork. The owner can run `.imagetheme` to list themes or `.imagetheme Goku` to switch artwork during the current process. Set `YOUTUBE_API_KEY` for official YouTube search used by `.play` and `.video`; set `MEDIA_DOWNLOAD_API_BASE` if using a compatible media resolver. `ffmpeg` is required by sticker features when enabled.
 
 Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red`, `gold`, and `ocean`. The owner can run `.theme` to list themes and `.theme <name>` to switch the active response theme. Outgoing text and media captions use the compact RedDragon formatter.
 

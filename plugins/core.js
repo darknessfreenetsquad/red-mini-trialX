@@ -1,6 +1,7 @@
 'use strict';
 
 const { redDragon } = require('../lib/theme');
+const { getImageUrl } = require('../lib/image-themes');
 
 module.exports = {
   commands: ['alive', 'ping'],
@@ -12,7 +13,8 @@ module.exports = {
       const latency = Date.now() - started;
       const speed = latency < 100 ? 'Excellent' : latency < 300 ? 'Good' : 'Slow';
       await socket.sendMessage(from, {
-        text: redDragon('PONG', [`Latency: ${latency}ms`, `Speed: ${speed}`], footer)
+        image: { url: getImageUrl('ping') },
+        caption: redDragon('PONG', [`Latency: ${latency}ms`, `Speed: ${speed}`], footer)
       }, { quoted: msg });
       return;
     }

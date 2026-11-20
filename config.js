@@ -13,6 +13,7 @@ module.exports = {
     BOT_VERSION: '1.0.0',
     BOT_FOOTER: '© ʀᴇᴅ ᴅʀᴀɢᴏɴ ᴅғs',
     THEME: 'silva',
+    IMAGE_THEME: 'Redragon',
     CHANNEL_LINK: '',
     NEWSLETTER_JID: '120363427119111004@newsletter',
     RCD_IMAGE_PATH: 'https://files.catbox.moe/eumprt.jpg'

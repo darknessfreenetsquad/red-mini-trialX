@@ -3,11 +3,14 @@
 const { test, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const vm = require('node:vm');
 const parse5 = require('parse5');
 
 delete process.env.SUPABASE_URL;
 delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'red-mini-http-'));
 const app = require('../index');
 const server = app.listen(0);
 after(() => server.close());

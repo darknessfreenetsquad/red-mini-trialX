@@ -108,7 +108,7 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   });
   await until(() => socket.sent.some(item => item.message.buttons?.length === 5));
   const menuMessage = socket.sent.find(item => item.message.buttons?.length === 5).message;
-  assert.match(menuMessage.text, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
+  assert.match(menuMessage.caption || menuMessage.text, /𝙍𝙀𝘿 𝙓𝙈𝘿/);
   assert.equal(menuMessage.buttons[0].buttonId, '.alive');
 
   socket.ev.emit('messages.upsert', {
@@ -117,7 +117,7 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
       { key: { remoteJid: '12345678901@s.whatsapp.net' }, message: { ephemeralMessage: { message: { extendedTextMessage: { text: '.ping' } } } } }
     ]
   });
-  await until(() => socket.sent.some(item => item.message.text?.includes('PONG')));
+  await until(() => socket.sent.some(item => (item.message.text || item.message.caption)?.includes('PONG')));
 
   socket.options.auth.creds.registered = true;
   socket.ev.emit('creds.update');

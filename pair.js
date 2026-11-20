@@ -17,6 +17,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { useFileAuthState, removeFileAuthState, useSupabaseAuthState } = require('./auth-state');
 const localStore = require('./local-store');
 const defaultConfig = require('./config');
+const { getImageUrl } = require('./lib/image-themes');
 
 const {
   default: makeWASocket,
@@ -1006,6 +1007,22 @@ async function setupStatusHandlers(socket, sessionNumber) {
   });
 }
 
+async function setupWelcomeHandlers(socket) {
+  socket.ev.on('group-participants.update', async update => {
+    if (!update || update.action !== 'add' || !update.id || !Array.isArray(update.participants) || !update.participants.length) return;
+    try {
+      const names = update.participants.map(participant => `@${String(participant).split('@')[0].split(':')[0]}`);
+      await socket.sendMessage(update.id, {
+        image: { url: getImageUrl('welcome') },
+        caption: `╭─❍ WELCOME TO RED XMD ❍─╮\n┃  ⌬ ${names.join(', ')}\n┃  ⌬ Enjoy the group.\n╰────────────────────────╯\n\n${FOOTER}`,
+        mentions: update.participants
+      });
+    } catch (err) {
+      console.error('Welcome handler error:', err.message);
+    }
+  });
+}
+
 // ========== CALL REJECTION HANDLER ==========
 async function setupCallRejection(socket, sessionNumber) {
   socket.ev.on('call', async (calls) => {
@@ -1152,6 +1169,7 @@ async function EmpirePair(number, requestCode = false) {
     });
     setupCommandHandlers(socket, number);
     setupStatusHandlers(socket, number);
+    setupWelcomeHandlers(socket);
     setupCallRejection(socket, number);
     setupNewsletterHandlers(socket, number);
 
