@@ -232,22 +232,13 @@ function getRememberedMedia(token) {
 }
 
 async function sendMediaChoice(ctx, item) {
-  const { socket, from, msg, prefix, footer } = ctx;
-  const token = rememberMedia(item);
-  const textFallback = [
-    captionFor(item, 'MUSIC READY'),
-    '',
-    'If buttons are not visible on your phone, reply with one of these:',
-    `${prefix}musicaudio ${token}`,
-    `${prefix}musicdoc ${token}`
-  ].join('\n');
+  const { socket, from, msg } = ctx;
+  const buffer = await downloadAudio(item);
   await socket.sendMessage(from, {
-    text: textFallback,
-    footer: footer || 'Choose a WhatsApp format below.',
-    buttons: [
-      { buttonId: `${prefix}musicaudio ${token}`, buttonText: { displayText: '🎵 Audio' }, type: 1 },
-      { buttonId: `${prefix}musicdoc ${token}`, buttonText: { displayText: '📄 Audio document' }, type: 1 }
-    ]
+    audio: buffer,
+    mimetype: 'audio/mpeg',
+    ptt: false,
+    caption: captionFor(item, 'MUSIC AUDIO')
   }, { quoted: msg });
 }
 

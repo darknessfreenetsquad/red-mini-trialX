@@ -48,25 +48,16 @@ test('all five providers are registered and old YouTube aliases are absent', () 
   assert.deepEqual(plugin.PROVIDER_ORDER, ['audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic']);
 });
 
-test('.music sends Audio and Document buttons that deliver WhatsApp media', async () => {
+test('.music sends audio directly without button payloads', async () => {
   axios.get = async url => url.includes('/tracks/search')
     ? { data: { data: [track()] } }
     : { data: Buffer.from('fake-mp3-audio') };
   const ctx = context('music');
   await plugin.run(ctx);
-  const choice = ctx.socket.sent.at(-1).message;
-  assert.equal(choice.buttons.length, 2);
-  assert.match(choice.text, /\.musicaudio/);
-  assert.match(choice.text, /\.musicdoc/);
-  const audioToken = choice.buttons[0].buttonId.split(' ')[1];
-  const audio = context('musicaudio', [audioToken]);
-  await plugin.run(audio);
-  assert.ok(Buffer.isBuffer(audio.socket.sent.at(-1).message.audio));
-  const documentToken = choice.buttons[1].buttonId.split(' ')[1];
-  const document = context('musicdoc', [documentToken]);
-  await plugin.run(document);
-  assert.ok(Buffer.isBuffer(document.socket.sent.at(-1).message.document));
-  assert.equal(document.socket.sent.at(-1).message.mimetype, 'audio/mpeg');
+  const message = ctx.socket.sent.at(-1).message;
+  assert.ok(Buffer.isBuffer(message.audio));
+  assert.equal(message.mimetype, 'audio/mpeg');
+  assert.equal(message.buttons, undefined);
 });
 
 test('.music falls back to Jamendo when Audius search has no result', async () => {
@@ -81,9 +72,10 @@ test('.music falls back to Jamendo when Audius search has no result', async () =
   const ctx = context('music');
   await plugin.run(ctx);
   const message = ctx.socket.sent.at(-1).message;
-  assert.equal(message.buttons.length, 2);
-  assert.match(message.text, /JAMENDO/);
-  assert.match(message.text, /Jam Song/);
+  assert.ok(Buffer.isBuffer(message.audio));
+  assert.equal(message.buttons, undefined);
+  assert.match(message.caption, /JAMENDO/);
+  assert.match(message.caption, /Jam Song/);
   assert.ok(calls.some(call => call.url.includes('api.jamendo.com')));
 });
 

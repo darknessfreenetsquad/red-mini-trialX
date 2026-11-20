@@ -1,8 +1,8 @@
 'use strict';
 
-const yts = require('yt-search');
 const axios = require('axios');
 const { redDragon, cleanFileName } = require('../lib/response-style');
+const { searchYouTube: searchYouTubeWeb } = require('../lib/youtube-search');
 
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
@@ -150,7 +150,7 @@ async function searchYouTube(query) {
   const cached = youtubeSearchCache.get(key);
   if (cached?.promise) return cached.promise;
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-  const primary = withTimeout(yts(key), YOUTUBE_SEARCH_TIMEOUT, 'YouTube search timed out.');
+  const primary = withTimeout(searchYouTubeWeb(key), YOUTUBE_SEARCH_TIMEOUT, 'YouTube search timed out.');
   const fallbackAvailable = Boolean(YOUTUBE_SEARCH_FALLBACK_URL || directYouTubeResult(key));
   const searchRequest = fallbackAvailable
     ? Promise.race([primary, withTimeout(fallbackYouTubeSearch(key), YOUTUBE_FALLBACK_TIMEOUT, 'YouTube fallback search timed out.')])
