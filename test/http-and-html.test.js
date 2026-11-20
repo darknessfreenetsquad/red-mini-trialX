@@ -49,6 +49,25 @@ test('frontend pages, redirect and status API are served', async () => {
   assert.ok(data.uptime >= 0);
 });
 
+test('dashboard exposes themes, commands, and text viewer controls', async () => {
+  const html = await (await request('/status')).text();
+  assert.match(html, /View Themes/);
+  assert.match(html, /View Commands/);
+  assert.match(html, /View Text/);
+  assert.match(html, /openCatalog\('themes'\)/);
+  assert.match(html, /openCatalog\('commands'\)/);
+
+  const response = await request('/api/catalog');
+  assert.equal(response.status, 200);
+  const data = await response.json();
+  assert.equal(data.activeTheme, 'Redragon');
+  assert.equal(data.themes.length, 10);
+  assert.ok(data.commandCount > 0);
+  assert.ok(data.pluginCount > 0);
+  assert.ok(data.groups.some(group => group.commands.includes('menu')) === false);
+  assert.ok(data.groups.some(group => group.commands.includes('ping')));
+});
+
 test('pairing validates input with local storage', async () => {
   const send = number => request('/code', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ number })
