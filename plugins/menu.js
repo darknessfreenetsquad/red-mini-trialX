@@ -6,7 +6,7 @@ const { getImageUrl } = require('../lib/image-themes');
 
 const CATEGORIES = [
   { icon: '⬇️', name: 'Downloaders', commands: ['download', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw'] },
-  { icon: '🎵', name: 'Music & Audio', commands: ['music', 'audius'] },
+  { icon: '🎵', name: 'Music & Audio', commands: ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic'] },
   { icon: '🔧', name: 'Tools', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair'] },
   { icon: '😄', name: 'Fun & Games', commands: ['truth', 'dare', 'rps'] },
   { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'theme', 'settheme', 'imagetheme', 'setimage'] },
@@ -52,7 +52,7 @@ module.exports = {
     const buttons = [
       { buttonId: `${prefix}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 },
       { buttonId: `${prefix}ping`, buttonText: { displayText: 'PING' }, type: 1 },
-      { buttonId: `${prefix}music`, buttonText: { displayText: 'MUSIC' }, type: 1 },
+      { buttonId: `${prefix}music`, buttonText: { displayText: 'MUSIC FALLBACK' }, type: 1 },
       { buttonId: `${prefix}theme`, buttonText: { displayText: 'THEMES' }, type: 1 },
       { buttonId: `${prefix}rps rock`, buttonText: { displayText: 'RPS' }, type: 1 }
     ];

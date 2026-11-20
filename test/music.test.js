@@ -6,7 +6,12 @@ const axios = require('axios');
 const plugin = require('../plugins/music');
 
 const originalGet = axios.get;
-after(() => { axios.get = originalGet; });
+const originalPost = axios.post;
+after(() => {
+  axios.get = originalGet;
+  axios.post = originalPost;
+  for (const key of ['SOUNDCLOUD_CLIENT_ID', 'SOUNDCLOUD_CLIENT_SECRET', 'JAMENDO_CLIENT_ID', 'SPOTIFY_CLIENT_ID', 'SPOTIFY_CLIENT_SECRET', 'APPLE_MUSIC_DEVELOPER_TOKEN']) delete process.env[key];
+});
 
 function context(command = 'music', args = ['test', 'song']) {
   return {
@@ -20,41 +25,78 @@ function context(command = 'music', args = ['test', 'song']) {
   };
 }
 
-test('Audius search uses the public track-search endpoint and maps a result', async () => {
+function track(overrides = {}) {
+  return { id: 'track-123', title: 'Test Song', user: { name: 'Test Artist' }, duration: 187, permalink: '/test-artist/test-song', ...overrides };
+}
+
+test('Audius search maps the public result and clickable source URL', async () => {
   let request;
   axios.get = async (url, options) => {
     request = { url, options };
-    return { data: { data: [{ id: 'track-123', title: 'Test Song', user: { name: 'Test Artist' }, duration: 187, permalink: 'https://audius.co/test-artist/test-song', artwork: { '150x150': 'https://cdn.test/art.jpg' }, is_downloadable: false }] } };
+    return { data: { data: [track()] } };
   };
   const result = await plugin.searchAudius('test song');
   assert.equal(request.url, 'https://api.audius.co/v1/tracks/search');
   assert.deepEqual(request.options.params, { query: 'test song', limit: 1 });
-  assert.deepEqual(result, {
-    id: 'track-123',
-    title: 'Test Song',
-    artist: 'Test Artist',
-    duration: 187,
-    url: 'https://audius.co/test-artist/test-song',
-    streamUrl: 'https://api.audius.co/v1/tracks/track-123/stream',
-    artwork: 'https://cdn.test/art.jpg',
-    downloadable: false
-  });
+  assert.equal(result.url, 'https://audius.co/test-artist/test-song');
+  assert.equal(result.audioUrl, 'https://api.audius.co/v1/tracks/track-123/stream');
 });
 
-test('.music searches Audius and sends an audio stream with source attribution', async () => {
-  axios.get = async () => ({ data: { data: [{ id: 'track-123', title: 'Test Song', user: { name: 'Test Artist' }, duration: 187, permalink: '/test-artist/test-song' }] } });
+test('all five providers are registered and old YouTube aliases are absent', () => {
+  assert.deepEqual(plugin.commands, ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic']);
+  for (const alias of ['play', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'play3', 'song2']) assert.equal(plugin.commands.includes(alias), false, alias);
+  assert.deepEqual(plugin.PROVIDER_ORDER, ['audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic']);
+});
+
+test('.music sends downloaded Audius media as a WhatsApp audio buffer', async () => {
+  axios.get = async url => url.includes('/tracks/search')
+    ? { data: { data: [track()] } }
+    : { data: Buffer.from('fake-mp3-audio') };
   const ctx = context('music');
   await plugin.run(ctx);
   const message = ctx.socket.sent.at(-1).message;
-  assert.equal(message.audio.url, 'https://api.audius.co/v1/tracks/track-123/stream');
+  assert.ok(Buffer.isBuffer(message.audio));
   assert.equal(message.mimetype, 'audio/mpeg');
-  assert.match(message.caption, /AUDIUS MUSIC/);
+  assert.match(message.caption, /AUDIUS/);
   assert.match(message.caption, /https:\/\/audius\.co\/test-artist\/test-song/);
 });
 
-test('.audius is the only music alias and old YouTube aliases are not registered', () => {
-  assert.deepEqual(plugin.commands, ['music', 'audius']);
-  for (const alias of ['play', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'play3', 'song2']) {
-    assert.equal(plugin.commands.includes(alias), false, alias);
-  }
+test('.music falls back to Jamendo when Audius media fails', async () => {
+  process.env.JAMENDO_CLIENT_ID = 'jamendo-test';
+  let calls = [];
+  axios.get = async (url, options) => {
+    calls.push({ url, options });
+    if (url.includes('audius.co/v1/tracks/search')) return { data: { data: [track({ permalink: '/audius/track' })] } };
+    if (url.includes('audius.co/v1/tracks/track-123/stream')) throw new Error('Audius redirect rejected');
+    if (url.includes('api.jamendo.com')) return { data: { results: [{ id: 'jam-9', name: 'Jam Song', artist_name: 'Jam Artist', duration: 200, shareurl: 'https://www.jamendo.com/track/jam-9', audio: 'https://cdn.jamendo.test/jam.mp3', audiodownload_allowed: true }] } };
+    return { data: Buffer.from('jamendo-audio') };
+  };
+  const ctx = context('music');
+  await plugin.run(ctx);
+  const message = ctx.socket.sent.at(-1).message;
+  assert.ok(Buffer.isBuffer(message.audio));
+  assert.match(message.caption, /JAMENDO/);
+  assert.match(message.caption, /Jam Song/);
+  assert.ok(calls.some(call => call.url.includes('api.jamendo.com')));
+});
+
+test('Spotify returns an official link when no preview audio exists', async () => {
+  process.env.SPOTIFY_CLIENT_ID = 'spotify-id';
+  process.env.SPOTIFY_CLIENT_SECRET = 'spotify-secret';
+  axios.post = async () => ({ data: { access_token: 'spotify-token' } });
+  axios.get = async (url) => ({ data: url.includes('spotify.com/v1/search') ? { tracks: { items: [{ id: 'sp-1', name: 'Spotify Song', artists: [{ name: 'Spotify Artist' }], external_urls: { spotify: 'https://open.spotify.com/track/sp-1' }, preview_url: null }] } } : {} });
+  const ctx = context('spotify');
+  await plugin.run(ctx);
+  const message = ctx.socket.sent.at(-1).message;
+  assert.match(message.text, /MUSIC LINK/);
+  assert.match(message.text, /https:\/\/open\.spotify\.com\/track\/sp-1/);
+});
+
+test('Apple Music maps an official preview when one is returned', async () => {
+  process.env.APPLE_MUSIC_DEVELOPER_TOKEN = 'apple-token';
+  axios.get = async () => ({ data: { results: { songs: { data: [{ id: 'apple-1', attributes: { name: 'Apple Song', artistName: 'Apple Artist', url: 'https://music.apple.com/us/song/apple-1', previews: [{ url: 'https://cdn.apple.test/preview.m4a' }], artwork: { url: 'https://cdn.apple.test/{w}x{h}.jpg' } } }] } } } });
+  const result = await plugin.searchAppleMusic('apple song');
+  assert.equal(result.preview, true);
+  assert.equal(result.audioUrl, 'https://cdn.apple.test/preview.m4a');
+  assert.equal(result.url, 'https://music.apple.com/us/song/apple-1');
 });

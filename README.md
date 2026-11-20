@@ -36,9 +36,9 @@ Supabase remains supported for operators who need shared persistence across inst
 
 ## Configuration
 
-Set `OWNER_NUMBER` to an international phone number with digits only if you want instance-wide owner commands. Set `IMAGE_THEME=Redragon` to choose the default menu, ping, and welcome artwork. The owner can run `.imagetheme` to list themes or `.imagetheme Goku` to switch artwork during the current process. Music uses the public Audius API through `.music <song or artist>`; `.audius` is an alias. Set `AUDIUS_API_BASE` only if you need a compatible Audius API base URL. `ffmpeg` is required by sticker features when enabled.
+Set `OWNER_NUMBER` to an international phone number with digits only if you want instance-wide owner commands. Set `IMAGE_THEME=Redragon` to choose the default menu, ping, and welcome artwork. The owner can run `.imagetheme` to list themes or `.imagetheme Goku` to switch artwork during the current process. Music uses a five-provider fallback through `.music <song or artist>`: Audius, SoundCloud, Jamendo, Spotify, and Apple Music. Provider-specific commands are `.audius`, `.soundcloud`, `.jamendo`, `.spotify`, and `.applemusic`. Empty provider credentials are skipped automatically.
 
-The bot intentionally has one music provider now: Audius. The old YouTube music commands (`.play`, `.video`, `.yta`, `.ytv`, `.ytmp3`, `.ytmp4`, and related aliases) have been removed from the plugin registry and menu.
+Audius, SoundCloud, and Jamendo may return playable provider media when the response and licensing permit it. Spotify and Apple Music are catalog/link providers; they do not provide a general full-song MP3 API. The bot sends an official link or preview when full media is not available instead of pretending the download succeeded. Configure provider credentials in `.env` or your hosting environment; never commit them.
 
 Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red`, `gold`, and `ocean`. The owner can run `.theme` to list themes and `.theme <name>` to switch the active response theme. Outgoing text and media captions use the compact RedDragon formatter.
 
