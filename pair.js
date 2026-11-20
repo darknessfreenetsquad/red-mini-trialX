@@ -162,6 +162,15 @@ function guardSocketSender(socket, number) {
   };
 }
 
+async function safeCommandReaction(socket, jid, key, text) {
+  try {
+    await socket.sendMessage(jid, { react: { text, key } });
+  } catch (error) {
+    // Reactions are optional UI feedback and must never bring down command handling.
+    console.warn(`Could not send command reaction ${text}:`, error.message);
+  }
+}
+
 async function downloadQuotedMedia(quoted) {
   if (!quoted) return null;
   const qTypes = ['imageMessage', 'videoMessage', 'audioMessage', 'documentMessage', 'stickerMessage'];
@@ -257,7 +266,10 @@ function setupCommandHandlers(socket, sessionNumber) {
     if (!body || typeof body !== 'string') continue;
 
     const from = msg.key.remoteJid;
-    const sender = msg.key.fromMe ? socket.user.id.split(':')[0] + '@s.whatsapp.net' : (msg.key.participant || msg.key.remoteJid);
+    const botId = socket.user?.id;
+    const sender = msg.key.fromMe
+      ? (botId ? botId.split(':')[0] + '@s.whatsapp.net' : from)
+      : (msg.key.participant || from);
     const identityNumbers = getMessageIdentityNumbers(msg.key, socket);
     const senderNumber = identityNumbers[0] || phoneNumberFromJid(sender) || sender.split('@')[0].split(':')[0];
     const isGroup = from.endsWith('@g.us');
@@ -268,12 +280,16 @@ function setupCommandHandlers(socket, sessionNumber) {
 
     if (!command) continue;
     console.log(`Command received: ${prefix}${command} from ${senderNumber} (${type})`);
+    let commandError = null;
+    let commandStarted = false;
 
     try {
       const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
       const mode = userConfig.WORK_TYPE || 'public';
       const isOwner = isOwnerMessage(msg.key, socket, sessionNumber);
       if (!isOwner && (mode === 'private' || (mode === 'groups' && !isGroup) || (mode === 'inbox' && isGroup))) return;
+      commandStarted = true;
+      await safeCommandReaction(socket, from, msg.key, '⏳');
       let groupMetadata = null;
       let isGroupAdmin = isOwner;
       let isBotAdmin = false;
@@ -1000,8 +1016,12 @@ ${FOOTER}`;
         return;
 
   } catch (err) {
-    console.error('Command error:', err);
-    await socket.sendMessage(msg.key.remoteJid, { text: '❌ An error occurred' }).catch(() => {});
+    commandError = err;
+    console.error(`Command error (${prefix}${command}):`, err?.stack || err);
+    const detail = String(err?.message || err || 'Unknown error').replace(/\s+/g, ' ').slice(0, 240);
+    await socket.sendMessage(msg.key.remoteJid, { text: `❌ ${prefix}${command} failed: ${detail}` }, { quoted: msg }).catch(() => {});
+  } finally {
+    if (commandStarted) await safeCommandReaction(socket, from, msg.key, commandError ? '❌' : '✅');
   }
   }
   });

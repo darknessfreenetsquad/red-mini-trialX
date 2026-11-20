@@ -138,8 +138,11 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   });
   command('.admin list', '12345678901@s.whatsapp.net');
   await until(() => socket.sent.some(item => item.message.text?.includes('Owner only')));
+  const beforeWorkType = socket.sent.length;
   command('.wtype private', '27634988678@s.whatsapp.net', true);
   await until(() => tables.configs.get('27634988678')?.config.WORK_TYPE === 'private');
+  await until(() => socket.sent.slice(beforeWorkType).some(item => item.message.react?.text === '✅'));
+  await new Promise(resolve => setTimeout(resolve, 20));
   const sentBefore = socket.sent.length;
   command('.ping', '12345678901@s.whatsapp.net');
   await new Promise(resolve => setTimeout(resolve, 50));
