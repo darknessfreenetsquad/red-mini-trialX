@@ -7,6 +7,7 @@ const { promisify } = require('util');
 const runFile = promisify(execFile);
 const { loadPlugins } = require('./plugin-loader');
 const commandPlugins = loadPlugins();
+const protectionPlugin = require('./plugins/protection');
 const { fmt, isThemedText } = require('./lib/theme');
 const router = express.Router();
 const pino = require('pino');
@@ -251,6 +252,7 @@ function isOwnerMessage(key, socket, sessionNumber) {
 function setupCommandHandlers(socket, sessionNumber) {
   socket.ev.on('messages.upsert', async ({ messages }) => {
     for (const msg of messages || []) {
+    await protectionPlugin.onMessage(socket, msg).catch(error => console.error('Protection message hook error:', error.message));
     if (!msg?.key?.remoteJid || !msg.message || msg.key.remoteJid === 'status@broadcast') continue;
 
     const content = unwrapMessageContent(msg.message);
@@ -1033,6 +1035,14 @@ ${FOOTER}`;
   });
 }
 
+function setupProtectionHandlers(socket) {
+  socket.ev.on('messages.update', async updates => {
+    for (const update of updates || []) {
+      await protectionPlugin.onRevocation(socket, update).catch(error => console.error('Protection revocation hook error:', error.message));
+    }
+  });
+}
+
 // ========== STATUS HANDLERS ==========
 async function setupStatusHandlers(socket, sessionNumber) {
   socket.ev.on('messages.upsert', async ({ messages }) => {
@@ -1221,6 +1231,7 @@ async function EmpirePair(number, requestCode = false) {
     });
     setupCommandHandlers(socket, number);
     setupStatusHandlers(socket, number);
+    setupProtectionHandlers(socket);
     setupWelcomeHandlers(socket);
     setupCallRejection(socket, number);
     setupNewsletterHandlers(socket, number);

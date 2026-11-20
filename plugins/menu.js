@@ -12,7 +12,7 @@ const CATEGORIES = [
   { icon: '😄', name: 'Fun & Games', commands: ['truth', 'dare', 'rps'] },
   { icon: '👥', name: 'Group', commands: ['kick', 'kickall', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel'] },
   { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'imagetheme', 'setimage', 'statusview'] },
-  { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
+  { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme', 'sudo'] }
 ];
 const BAR = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
 const HIDDEN_COMMANDS = new Set(['musicaudio', 'musicdoc']);
@@ -48,7 +48,7 @@ function buildMenu(prefix) {
 }
 
 module.exports = {
-  commands: ['menu'],
+  commands: ['menu', 'help'],
   buildMenu,
   async run(ctx) {
     const { socket, msg, from, prefix } = ctx;

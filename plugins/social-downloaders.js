@@ -14,9 +14,16 @@ const providers = {
       {
         url: 'https://api.siputzx.my.id/api/download/fb',
         params: input => ({ url: input })
+      },
+      {
+        url: 'https://api.hanggts.xyz/download/facebook',
+        params: input => ({ url: input })
       }
     ],
-    field: data => data?.data?.directUrl || data?.result?.hd || data?.result?.video?.[0]?.url,
+    field: data => data?.data?.directUrl || data?.result?.hd || data?.result?.video?.[0]?.url ||
+      data?.result?.media?.video_hd || data?.result?.media?.video_sd || data?.result?.url ||
+      data?.result?.download || data?.result?.video || data?.data?.url || data?.data?.download ||
+      data?.url || data?.download,
     type: 'video',
     label: 'Facebook'
   },

@@ -50,6 +50,10 @@ function participantJid(participant) {
   return participant?.id || participant?.jid || null;
 }
 
+function jidIdentity(value) {
+  return String(value || '').split('@')[0].split(':')[0].replace(/\D/g, '');
+}
+
 async function sendGroupStatus(ctx, title, target, text) {
   await ctx.socket.sendMessage(target, {
     text: redDragon(title, [text], ctx.footer)
@@ -134,13 +138,14 @@ module.exports = {
       ...args.map(jidFromValue).filter(Boolean)
     ]);
     const participants = groupMetadata?.participants || [];
-    const botJid = socket.user?.id || '';
+    const botIdentities = new Set([socket.user?.id, socket.user?.lid]
+      .map(jidIdentity).filter(Boolean));
     const protectedJids = new Set(participants.filter(participant =>
-      ['admin', 'superadmin'].includes(participant.admin) || participantJid(participant) === botJid
+      ['admin', 'superadmin'].includes(participant.admin) || botIdentities.has(jidIdentity(participantJid(participant)))
     ).map(participantJid));
 
     if (command === 'kick') {
-      const targets = candidates.filter(jid => !protectedJids.has(jid));
+      const targets = candidates.filter(jid => !protectedJids.has(jid) && !botIdentities.has(jidIdentity(jid)));
       if (!targets.length) {
         await socket.sendMessage(from, { text: redDragon('KICK', ['Mention, reply to, or provide the number of a participant. Admins and the bot are protected.'], footer) }, { quoted: msg });
         return;
