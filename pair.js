@@ -1013,6 +1013,10 @@ ${FOOTER}`;
       }
 
       // ==================== DEFAULT ====================
+        commandError = new Error(`Unknown command: ${prefix}${command}`);
+        await socket.sendMessage(from, {
+          text: `❌ Unknown command: ${prefix}${command}\nUse ${prefix}menu to view available commands.`
+        }, { quoted: msg });
         return;
 
   } catch (err) {

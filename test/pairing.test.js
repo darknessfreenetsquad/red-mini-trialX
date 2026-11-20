@@ -147,6 +147,8 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   command('.ping', '12345678901@s.whatsapp.net');
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(socket.sent.length, sentBefore, 'private mode ignores other users');
+  command('.not-a-real-command', '27634988678@s.whatsapp.net', true);
+  await until(() => socket.sent.some(item => item.message.text?.includes('Unknown command')));
 
   socket.ev.emit('connection.update', { connection: 'close', lastDisconnect: { error: { output: { statusCode: baileys.DisconnectReason.connectionLost } } } });
   assert.equal(pair.getActiveSessions().length, 0);
