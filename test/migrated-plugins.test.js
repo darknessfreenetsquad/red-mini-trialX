@@ -21,8 +21,11 @@ function ctx(command, args = []) {
 
 test('plugin loader exposes migrated non-menu commands', () => {
   const registry = loadPlugins();
-  for (const command of ['play', 'video', 'ytmp3', 'ytmp4', 'ytmpdoc', 'yta', 'ytv', 'play3', 'song2', 'download', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'theme', 'settheme']) {
+  for (const command of ['music', 'audius', 'download', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'theme', 'settheme']) {
     assert.ok(registry.has(command), command);
+  }
+  for (const command of ['play', 'video', 'ytmp3', 'ytmp4', 'ytmpdoc', 'yta', 'ytv', 'play3', 'song2']) {
+    assert.equal(registry.has(command), false, `${command} should be removed`);
   }
   assert.ok(registry.has('menu'), 'existing menu plugin remains available');
 });

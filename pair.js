@@ -315,8 +315,7 @@ function setupCommandHandlers(socket, sessionNumber) {
 ╰─────────────────────╯
 
 ╭───❰ 📥 DOWNLOADER ❱───╮
-│ 🎵 ${prefix}play <song>
-│ 🎬 ${prefix}video <name>
+│ 🎵 ${prefix}music <song or artist>
 │ 📘 ${prefix}fb <url>
 │ 🎨 ${prefix}sticker
 │ 📸 ${prefix}instagram <url>
@@ -356,7 +355,7 @@ ${FOOTER}`;
           { buttonId: `${prefix}alive`, buttonText: { displayText: '🤖 ALIVE' }, type: 1 },
           { buttonId: `${prefix}ping`, buttonText: { displayText: '⚡ PING' }, type: 1 },
           { buttonId: `${prefix}sticker`, buttonText: { displayText: '🎨 STICKER' }, type: 1 },
-          { buttonId: `${prefix}play`, buttonText: { displayText: '🎵 PLAY' }, type: 1 },
+          { buttonId: `${prefix}music`, buttonText: { displayText: '🎵 MUSIC' }, type: 1 },
           { buttonId: `${prefix}weather`, buttonText: { displayText: '🌤️ WEATHER' }, type: 1 }
         ];
 
