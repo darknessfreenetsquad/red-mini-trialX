@@ -7,7 +7,7 @@
     "start": "node index.js",
     "build": "npm run check",
     "test": "node --test",
-    "check": "node --check index.js && node --check pair.js && node --check auth-state.js && node --check plugin-loader.js && node --check lib/theme.js && node --check lib/response-style.js && node --check lib/image-themes.js && node --check plugins/core.js && node --check plugins/menu.js && node --check plugins/theme.js && node --check plugins/image-theme.js && node --check plugins/music.js && node --check plugins/group.js && node --check plugins/converter.js && node --check plugins/update.js && node --check plugins/games.js && node --check plugins/social-downloaders.js && node --check plugins/download.js"
+    "check": "node --check index.js && node --check pair.js && node --check auth-state.js && node --check plugin-loader.js && node --check lib/theme.js && node --check lib/response-style.js && node --check lib/image-themes.js && node --check plugins/core.js && node --check plugins/menu.js && node --check plugins/theme.js && node --check plugins/image-theme.js && node --check plugins/music.js && node --check plugins/group.js && node --check plugins/converter.js && node --check plugins/update.js && node --check plugins/status.js && node --check plugins/games.js && node --check plugins/social-downloaders.js && node --check plugins/download.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

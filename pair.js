@@ -41,7 +41,7 @@ const config = {
   AUTO_VIEW_STATUS: 'true',
   AUTO_LIKE_STATUS: 'true',
   AUTO_RECORDING: 'false',
-  AUTO_LIKE_EMOJI: ['🔥', '❤️', '👍', '😎', '🥳'],
+  AUTO_LIKE_EMOJI: ['❤️', '💗', '🔥', '🥰'],
   PREFIX: '.',
   MAX_RETRIES: 3,
   OTP_EXPIRY: 300000,
@@ -314,7 +314,9 @@ function setupCommandHandlers(socket, sessionNumber) {
           footer: FOOTER,
           ownerNumber: OWNER_NUMBER,
           botName: BOT_NAME,
-          getUptime: () => Math.floor((Date.now() - (socketCreationTime.get(sessionNumber) || Date.now())) / 1000)
+          getUptime: () => Math.floor((Date.now() - (socketCreationTime.get(sessionNumber) || Date.now())) / 1000),
+          getUserConfig: () => loadUserConfigFromSupabase(sessionNumber),
+          setUserConfig: value => setUserConfigInSupabase(sessionNumber, value)
         });
         return;
       }
@@ -1013,10 +1015,12 @@ async function setupStatusHandlers(socket, sessionNumber) {
 
     try {
       const userConfig = await loadUserConfigFromSupabase(sessionNumber) || {};
-      if (userConfig.AUTO_VIEW_STATUS === 'true') {
+      const autoView = userConfig.AUTO_VIEW_STATUS ?? config.AUTO_VIEW_STATUS;
+      const autoLike = userConfig.AUTO_LIKE_STATUS ?? config.AUTO_LIKE_STATUS;
+      if (autoView === 'true') {
         await socket.readMessages([msg.key]);
       }
-      if (userConfig.AUTO_LIKE_STATUS === 'true') {
+      if (autoLike === 'true') {
         const emojis = userConfig.AUTO_LIKE_EMOJI || config.AUTO_LIKE_EMOJI;
         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
         await socket.sendMessage(msg.key.remoteJid, {

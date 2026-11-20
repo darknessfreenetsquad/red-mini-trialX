@@ -42,6 +42,8 @@ Audius, SoundCloud, and Jamendo may return playable provider media when the resp
 
 Group administrators can use `.kick`, `.kickall`, `.mute`, `.open`, and `.adddescription`. `.addstgroup <text>` sends a RED XMD status card to the current group, while the owner can use `.addstchannel <text>` with `NEWSLETTER_JID` configured. `.tgstickers <direct image URL>` converts a direct sticker image into a WhatsApp sticker. Media conversion commands are `.to-url`, `.to-doc`, `.to-music`, and `.to-sticker`; reply to the media when using them. `.spotify <song>` searches Spotify when Spotify credentials are configured. `.update` is an owner-only repository version checker: it reports new commits and tells each deployment owner to pull and restart safely; it never changes a running deployment remotely.
 
+Automatic status viewing is enabled by default. The owner can run `.statusview` to inspect it, `.statusview on` or `.statusview off` to toggle viewing, `.statusview like on|off` to control reactions, and `.statusview emojis ❤️ 💗 🔥 🥰` to set the reaction list. The bot uses `❤️`, `💗`, `🔥`, and `🥰` by default.
+
 Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red` and `ocean`. The owner can run `.theme` to list text themes and `.theme <name>` to switch the active response theme. Use `.imagetheme` for the artwork themes shown on menu, ping, welcome, and alive responses. Outgoing text and media captions use the compact RedDragon formatter.
 
 ## HTTP endpoints

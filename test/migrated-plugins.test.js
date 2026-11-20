@@ -21,7 +21,7 @@ function ctx(command, args = []) {
 
 test('plugin loader exposes migrated non-menu commands', () => {
   const registry = loadPlugins();
-  for (const command of ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'kick', 'kickall', 'tgstickers', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'update', 'download', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'theme', 'settheme']) {
+  for (const command of ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'kick', 'kickall', 'tgstickers', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'update', 'statusview', 'download', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'theme', 'settheme']) {
     assert.ok(registry.has(command), command);
   }
   for (const command of ['play', 'video', 'ytmp3', 'ytmp4', 'ytmpdoc', 'yta', 'ytv', 'play3', 'song2']) {
