@@ -9,6 +9,7 @@ const axios = require('axios');
 const FormData = require('form-data');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 const { redDragon, cleanFileName } = require('../lib/response-style');
+const { toSticker: convertToSticker } = require('../lib/sticker');
 
 const runFile = promisify(execFile);
 
@@ -67,19 +68,7 @@ async function toMp3(media) {
 
 async function toSticker(media) {
   if (!media.mime.startsWith('image/') && !media.mime.startsWith('video/')) throw new Error('Reply to an image or video for .to-sticker.');
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'red-mini-sticker-'));
-  const input = path.join(dir, 'input');
-  const output = path.join(dir, 'output.webp');
-  try {
-    await fs.writeFile(input, media.buffer, { mode: 0o600 });
-    const args = media.mime.startsWith('video/')
-      ? ['-y', '-i', input, '-t', '6', '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2,fps=15', '-loop', '0', '-an', output]
-      : ['-y', '-i', input, '-vcodec', 'libwebp', '-vf', 'scale=512:512:force_original_aspect_ratio=decrease,pad=512:512:(ow-iw)/2:(oh-ih)/2', '-lossless', '1', '-loop', '0', output];
-    await runFile('ffmpeg', args, { timeout: 45000 });
-    return await fs.readFile(output);
-  } finally {
-    await fs.remove(dir).catch(() => {});
-  }
+  return convertToSticker(media.buffer, media.mime);
 }
 
 async function uploadToUrl(media) {

@@ -20,6 +20,7 @@ const { useFileAuthState, removeFileAuthState, useSupabaseAuthState } = require(
 const localStore = require('./local-store');
 const defaultConfig = require('./config');
 const { getImageUrl } = require('./lib/image-themes');
+const { toSticker: convertToSticker } = require('./lib/sticker');
 
 const {
   default: makeWASocket,
@@ -464,21 +465,13 @@ ${FOOTER}`;
           return;
         }
 
-        let tempDir;
         try {
           const mediaMessage = (msg.message?.imageMessage || msg.message?.videoMessage) ? msg.message : quoted;
           const media = await downloadQuotedMedia(mediaMessage);
           if (!media?.buffer) throw new Error('Missing media');
-          tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'red-mini-sticker-'));
-          const input = path.join(tempDir, 'input');
-          const output = path.join(tempDir, 'output.webp');
-          await fs.writeFile(input, media.buffer, { mode: 0o600 });
-          await runFile('ffmpeg', ['-y', '-i', input, '-vcodec', 'libwebp', '-filter:v', 'fps=20', '-lossless', '1', '-loop', '0', '-preset', 'default', '-an', '-s', '512:512', output], { timeout: 30000 });
-          await socket.sendMessage(from, { sticker: await fs.readFile(output) }, { quoted: msg });
+          await socket.sendMessage(from, { sticker: await convertToSticker(media.buffer, mime) }, { quoted: msg });
         } catch (e) {
-          await socket.sendMessage(from, { text: '❌ Error creating sticker' }, { quoted: msg });
-        } finally {
-          if (tempDir) await fs.remove(tempDir).catch(() => {});
+          await socket.sendMessage(from, { text: `❌ Error creating sticker: ${e.message}` }, { quoted: msg });
         }
         return;
       }
