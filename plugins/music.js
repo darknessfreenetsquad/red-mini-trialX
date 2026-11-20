@@ -8,6 +8,8 @@ const SOUNDCLOUD_API_BASE = 'https://api.soundcloud.com';
 const SOUNDCLOUD_AUTH_BASE = 'https://secure.soundcloud.com';
 const APPLE_MUSIC_STOREFRONT = process.env.APPLE_MUSIC_STOREFRONT || 'us';
 const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
+const MEDIA_TOKEN_TTL = 10 * 60 * 1000;
+const pendingMedia = new Map();
 
 class ProviderUnavailable extends Error {}
 
@@ -208,8 +210,40 @@ function captionFor(item, title = 'MUSIC') {
   ]);
 }
 
+function rememberMedia(item) {
+  const token = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  pendingMedia.set(token, { item, expiresAt: Date.now() + MEDIA_TOKEN_TTL });
+  for (const [key, value] of pendingMedia) {
+    if (value.expiresAt < Date.now()) pendingMedia.delete(key);
+  }
+  return token;
+}
+
+function getRememberedMedia(token) {
+  const entry = pendingMedia.get(String(token || ''));
+  if (!entry || entry.expiresAt < Date.now()) {
+    if (token) pendingMedia.delete(String(token));
+    return null;
+  }
+  return entry.item;
+}
+
+async function sendMediaChoice(ctx, item) {
+  const { socket, from, msg, prefix, footer } = ctx;
+  const token = rememberMedia(item);
+  await socket.sendMessage(from, {
+    text: captionFor(item, 'MUSIC READY'),
+    footer: footer || 'Choose a WhatsApp format below.',
+    buttons: [
+      { buttonId: `${prefix}musicaudio ${token}`, buttonText: { displayText: '🎵 Audio' }, type: 1 },
+      { buttonId: `${prefix}musicdoc ${token}`, buttonText: { displayText: '📄 Audio document' }, type: 1 }
+    ]
+  }, { quoted: msg });
+}
+
 module.exports = {
-  commands: ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic'],
+  commands: ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'musicaudio', 'musicdoc'],
+  hiddenCommands: ['musicaudio', 'musicdoc'],
   PROVIDER_ORDER,
   searchAudius,
   searchSoundCloud,
@@ -221,6 +255,30 @@ module.exports = {
   downloadAudio,
   async run(ctx) {
     const { socket, from, msg, args, footer, command } = ctx;
+    if (command === 'musicaudio' || command === 'musicdoc') {
+      const item = getRememberedMedia(args[0]);
+      if (!item) {
+        await socket.sendMessage(from, { text: redDragon('MUSIC BUTTON', ['This media button has expired. Run .music again.'], footer) }, { quoted: msg });
+        return;
+      }
+      try {
+        const buffer = await downloadAudio(item);
+        const caption = captionFor(item, command === 'musicdoc' ? 'MUSIC DOCUMENT' : 'MUSIC AUDIO');
+        if (command === 'musicdoc') {
+          await socket.sendMessage(from, {
+            document: buffer,
+            mimetype: 'audio/mpeg',
+            fileName: `${item.title.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 60) || 'red-mini-music'}.mp3`,
+            caption
+          }, { quoted: msg });
+        } else {
+          await socket.sendMessage(from, { audio: buffer, mimetype: 'audio/mpeg', ptt: false, caption }, { quoted: msg });
+        }
+      } catch (error) {
+        await socket.sendMessage(from, { text: redDragon('MUSIC MEDIA ERROR', [error.message, 'Try .music again for another provider.'], footer) }, { quoted: msg });
+      }
+      return;
+    }
     if (!args.length) {
       await socket.sendMessage(from, { text: redDragon('MUSIC SEARCH', [
         'Usage: .music <song or artist>',
@@ -248,13 +306,7 @@ module.exports = {
           continue;
         }
         try {
-          const buffer = await downloadAudio(item);
-          await socket.sendMessage(from, {
-            audio: buffer,
-            mimetype: 'audio/mpeg',
-            ptt: false,
-            caption: captionFor(item)
-          }, { quoted: msg });
+          await sendMediaChoice(ctx, item);
           return;
         } catch (mediaError) {
           console.error(`${item.provider} media error:`, mediaError.message);

@@ -13,11 +13,13 @@ const CATEGORIES = [
   { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
 ];
 const BAR = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
+const HIDDEN_COMMANDS = new Set(['musicaudio', 'musicdoc']);
 
 function buildMenu(prefix) {
   const registry = loadPlugins();
   const available = new Set(registry.keys());
   available.delete('menu');
+  HIDDEN_COMMANDS.forEach(command => available.delete(command));
   const assigned = new Set();
   const sections = [];
 

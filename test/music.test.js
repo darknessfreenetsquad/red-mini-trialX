@@ -43,40 +43,45 @@ test('Audius search maps the public result and clickable source URL', async () =
 });
 
 test('all five providers are registered and old YouTube aliases are absent', () => {
-  assert.deepEqual(plugin.commands, ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic']);
+  assert.deepEqual(plugin.commands, ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'musicaudio', 'musicdoc']);
   for (const alias of ['play', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'play3', 'song2']) assert.equal(plugin.commands.includes(alias), false, alias);
   assert.deepEqual(plugin.PROVIDER_ORDER, ['audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic']);
 });
 
-test('.music sends downloaded Audius media as a WhatsApp audio buffer', async () => {
+test('.music sends Audio and Document buttons that deliver WhatsApp media', async () => {
   axios.get = async url => url.includes('/tracks/search')
     ? { data: { data: [track()] } }
     : { data: Buffer.from('fake-mp3-audio') };
   const ctx = context('music');
   await plugin.run(ctx);
-  const message = ctx.socket.sent.at(-1).message;
-  assert.ok(Buffer.isBuffer(message.audio));
-  assert.equal(message.mimetype, 'audio/mpeg');
-  assert.match(message.caption, /AUDIUS/);
-  assert.match(message.caption, /https:\/\/audius\.co\/test-artist\/test-song/);
+  const choice = ctx.socket.sent.at(-1).message;
+  assert.equal(choice.buttons.length, 2);
+  const audioToken = choice.buttons[0].buttonId.split(' ')[1];
+  const audio = context('musicaudio', [audioToken]);
+  await plugin.run(audio);
+  assert.ok(Buffer.isBuffer(audio.socket.sent.at(-1).message.audio));
+  const documentToken = choice.buttons[1].buttonId.split(' ')[1];
+  const document = context('musicdoc', [documentToken]);
+  await plugin.run(document);
+  assert.ok(Buffer.isBuffer(document.socket.sent.at(-1).message.document));
+  assert.equal(document.socket.sent.at(-1).message.mimetype, 'audio/mpeg');
 });
 
-test('.music falls back to Jamendo when Audius media fails', async () => {
+test('.music falls back to Jamendo when Audius search has no result', async () => {
   process.env.JAMENDO_CLIENT_ID = 'jamendo-test';
   let calls = [];
   axios.get = async (url, options) => {
     calls.push({ url, options });
-    if (url.includes('audius.co/v1/tracks/search')) return { data: { data: [track({ permalink: '/audius/track' })] } };
-    if (url.includes('audius.co/v1/tracks/track-123/stream')) throw new Error('Audius redirect rejected');
+    if (url.includes('audius.co/v1/tracks/search')) return { data: { data: [] } };
     if (url.includes('api.jamendo.com')) return { data: { results: [{ id: 'jam-9', name: 'Jam Song', artist_name: 'Jam Artist', duration: 200, shareurl: 'https://www.jamendo.com/track/jam-9', audio: 'https://cdn.jamendo.test/jam.mp3', audiodownload_allowed: true }] } };
     return { data: Buffer.from('jamendo-audio') };
   };
   const ctx = context('music');
   await plugin.run(ctx);
   const message = ctx.socket.sent.at(-1).message;
-  assert.ok(Buffer.isBuffer(message.audio));
-  assert.match(message.caption, /JAMENDO/);
-  assert.match(message.caption, /Jam Song/);
+  assert.equal(message.buttons.length, 2);
+  assert.match(message.text, /JAMENDO/);
+  assert.match(message.text, /Jam Song/);
   assert.ok(calls.some(call => call.url.includes('api.jamendo.com')));
 });
 

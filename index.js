@@ -46,6 +46,8 @@ app.get('/api/status', async (req, res) => {
 app.get('/api/catalog', (req, res) => {
     const plugins = loadPlugins();
     const available = new Set(plugins.keys());
+    available.delete('musicaudio');
+    available.delete('musicdoc');
     const groups = COMMAND_GROUPS.map(group => ({
         name: group.name,
         icon: group.icon,
