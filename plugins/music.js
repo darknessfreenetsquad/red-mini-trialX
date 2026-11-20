@@ -169,13 +169,16 @@ async function collectMusicResults(query, requestedProvider = '') {
   const names = requestedProvider ? [requestedProvider] : PROVIDER_ORDER;
   const failures = [];
   const items = [];
-  for (const name of names) {
+  const results = await Promise.all(names.map(async name => {
     try {
-      const item = await PROVIDERS[name](phrase);
-      if (item) items.push(item);
+      return { name, item: await PROVIDERS[name](phrase), error: null };
     } catch (error) {
-      failures.push(`${name}: ${error.message}`);
+      return { name, item: null, error };
     }
+  }));
+  for (const result of results) {
+    if (result.item) items.push(result.item);
+    if (result.error) failures.push(`${result.name}: ${result.error.message}`);
   }
   return { items, failures };
 }
