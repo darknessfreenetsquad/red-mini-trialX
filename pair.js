@@ -181,12 +181,18 @@ async function downloadQuotedMedia(quoted) {
   if (!qType) return null;
   const messageType = qType.replace(/Message$/i, '').toLowerCase();
   const stream = await downloadContentFromMessage(quoted[qType], messageType);
+  // Capture Undici/Baileys socket failures before consuming the readable.
+  if (stream && typeof stream.on === 'function') stream.on('error', () => {});
   const chunks = [];
   let size = 0;
-  for await (const chunk of stream) {
-    size += chunk.length;
-    if (size > 20 * 1024 * 1024) throw new Error('Media exceeds 20 MB limit');
-    chunks.push(chunk);
+  try {
+    for await (const chunk of stream) {
+      size += chunk.length;
+      if (size > 20 * 1024 * 1024) throw new Error('Media exceeds 20 MB limit');
+      chunks.push(chunk);
+    }
+  } catch (error) {
+    throw new Error(`Media download failed: ${error.message || error}`);
   }
   const buffer = Buffer.concat(chunks);
   return {
@@ -1278,6 +1284,10 @@ async function checkDatabase() {
 }
 
 async function startSavedSessions() {
+  if (process.env.RED_DASHBOARD_ONLY === '1') {
+    console.log('Dashboard-only mode: refusing to restore WhatsApp sessions.');
+    return [];
+  }
   const numbers = await getAllNumbersFromSupabase();
   const results = [];
   for (const number of numbers) {
@@ -1291,6 +1301,9 @@ async function startSavedSessions() {
 const requestCounts = new Map();
 
 router.post('/', async (req, res) => {
+  if (process.env.RED_DASHBOARD_ONLY === '1') {
+    return res.status(503).json({ error: 'WhatsApp lifecycle is disabled in dashboard-only mode', dashboardOnly: true });
+  }
   const now = Date.now();
   for (const [ip, entry] of requestCounts) if (entry.expires <= now) requestCounts.delete(ip);
   const entry = requestCounts.get(req.ip) || { count: 0, expires: now + 60000 };
@@ -1317,6 +1330,9 @@ router.get('/ping', (req, res) => {
 });
 
 router.post('/connect-all', async (req, res) => {
+  if (process.env.RED_DASHBOARD_ONLY === '1') {
+    return res.status(503).json({ error: 'WhatsApp lifecycle is disabled in dashboard-only mode', dashboardOnly: true });
+  }
   try {
     const results = await startSavedSessions();
     res.json({ status: 'success', attempted: results.length, failed: results.filter(r => r.status === 'error').length,

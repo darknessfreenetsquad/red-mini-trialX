@@ -27,6 +27,7 @@ tempCleanupTimer.unref();
 
 const app = express();
 const PORT = process.env.PORT || 8002;
+const DASHBOARD_ONLY = process.env.RED_DASHBOARD_ONLY === '1';
 const defaultConfig = require('./config');
 const code = require('./pair');
 const { loadPlugins } = require('./plugin-loader');
@@ -46,6 +47,15 @@ const COMMAND_GROUPS = [
 app.disable('x-powered-by');
 app.use(express.json({ limit: '16kb' }));
 app.use(express.urlencoded({ extended: false, limit: '16kb' }));
+if (DASHBOARD_ONLY) {
+    // Viewing the dashboard must never create or restore a WhatsApp session.
+    app.use('/code', (req, res, next) => {
+        res.status(503).json({
+            error: 'WhatsApp lifecycle is disabled in dashboard-only mode',
+            dashboardOnly: true
+        });
+    });
+}
 app.use('/code', code);
 
 app.get('/status', (req, res) => res.sendFile(path.join(__dirname, 'status.html')));
