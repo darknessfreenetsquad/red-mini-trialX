@@ -1,5 +1,30 @@
 const express = require('express');
+const fs = require('fs');
 const path = require('path');
+
+// Keep transient media away from a potentially quota-limited system /tmp.
+const customTemp = path.join(process.cwd(), 'temp');
+fs.mkdirSync(customTemp, { recursive: true });
+process.env.TMPDIR = customTemp;
+process.env.TEMP = customTemp;
+process.env.TMP = customTemp;
+
+const TEMP_MAX_AGE_MS = 3 * 60 * 60 * 1000;
+const tempCleanupTimer = setInterval(() => {
+    fs.readdir(customTemp, (readError, files) => {
+        if (readError) return;
+        for (const file of files) {
+            const filePath = path.join(customTemp, file);
+            fs.stat(filePath, (statError, stats) => {
+                if (!statError && stats.isFile() && Date.now() - stats.mtimeMs > TEMP_MAX_AGE_MS) {
+                    fs.unlink(filePath, () => {});
+                }
+            });
+        }
+    });
+}, TEMP_MAX_AGE_MS);
+tempCleanupTimer.unref();
+
 const app = express();
 const PORT = process.env.PORT || 8002;
 const defaultConfig = require('./config');
