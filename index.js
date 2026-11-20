@@ -98,10 +98,14 @@ app.get('/api/catalog', (req, res) => {
 
 app.get('/', (req, res) => res.redirect('/status'));
 
-if (require.main === module && process.env.RED_DASHBOARD_ONLY !== '1') {
+if (require.main === module) {
     app.listen(PORT, () => {
         console.log(`Red Mini listening on port ${PORT}`);
-        code.startSavedSessions().catch(err => console.error('Could not restore sessions:', err.message));
+        if (process.env.RED_DASHBOARD_ONLY !== '1') {
+            code.startSavedSessions().catch(err => console.error('Could not restore sessions:', err.message));
+        } else {
+            console.log('Dashboard-only mode: WhatsApp session restoration disabled.');
+        }
     });
 }
 
