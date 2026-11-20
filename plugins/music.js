@@ -231,8 +231,15 @@ function getRememberedMedia(token) {
 async function sendMediaChoice(ctx, item) {
   const { socket, from, msg, prefix, footer } = ctx;
   const token = rememberMedia(item);
+  const textFallback = [
+    captionFor(item, 'MUSIC READY'),
+    '',
+    'If buttons are not visible on your phone, reply with one of these:',
+    `${prefix}musicaudio ${token}`,
+    `${prefix}musicdoc ${token}`
+  ].join('\n');
   await socket.sendMessage(from, {
-    text: captionFor(item, 'MUSIC READY'),
+    text: textFallback,
     footer: footer || 'Choose a WhatsApp format below.',
     buttons: [
       { buttonId: `${prefix}musicaudio ${token}`, buttonText: { displayText: '🎵 Audio' }, type: 1 },

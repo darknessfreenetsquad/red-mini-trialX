@@ -1,7 +1,7 @@
 'use strict';
 
 const { redDragon } = require('../lib/theme');
-const { getImageUrl } = require('../lib/image-themes');
+const { getImageUrl, getActiveImageTheme } = require('../lib/image-themes');
 
 module.exports = {
   commands: ['alive', 'ping'],
@@ -23,8 +23,10 @@ module.exports = {
     const hours = Math.floor(uptime / 3600);
     const minutes = Math.floor((uptime % 3600) / 60);
     const seconds = Math.floor(uptime % 60);
+    const imageTheme = getActiveImageTheme();
     await socket.sendMessage(from, {
-      text: redDragon('BOT ONLINE', [`Bot: ${botName}`, `Owner: ${ownerNumber || 'Not configured'}`, `Uptime: ${hours}h ${minutes}m ${seconds}s`, 'Status: Active', 'Region: South Africa'], footer)
+      image: { url: getImageUrl('welcome') },
+      caption: redDragon('BOT ONLINE', [`Bot: ${botName}`, `Owner: ${ownerNumber || 'Not configured'}`, `Uptime: ${hours}h ${minutes}m ${seconds}s`, 'Status: Active', 'Region: South Africa', `Image Theme: ${imageTheme.name}`], footer)
     }, { quoted: msg });
   }
 };

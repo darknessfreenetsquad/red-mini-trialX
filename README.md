@@ -40,7 +40,7 @@ Set `OWNER_NUMBER` to an international phone number with digits only if you want
 
 Audius, SoundCloud, and Jamendo may return playable provider media when the response and licensing permit it. Spotify and Apple Music are catalog/link providers; they do not provide a general full-song MP3 API. The bot sends an official link or preview when full media is not available instead of pretending the download succeeded. Configure provider credentials in `.env` or your hosting environment; never commit them.
 
-Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red`, `gold`, and `ocean`. The owner can run `.theme` to list themes and `.theme <name>` to switch the active response theme. Outgoing text and media captions use the compact RedDragon formatter.
+Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red` and `ocean`. The owner can run `.theme` to list text themes and `.theme <name>` to switch the active response theme. Use `.imagetheme` for the artwork themes shown on menu, ping, welcome, and alive responses. Outgoing text and media captions use the compact RedDragon formatter.
 
 ## HTTP endpoints
 

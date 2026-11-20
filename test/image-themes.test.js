@@ -39,10 +39,14 @@ test('menu and ping send selected artwork with compact captions', async () => {
   setActiveImageTheme('Naruto');
   await menu.run({ socket, msg, from: msg.key.remoteJid, prefix: '.', footer: 'footer' });
   await core.run({ socket, msg, from: msg.key.remoteJid, command: 'ping', footer: 'footer' });
+  await core.run({ socket, msg, from: msg.key.remoteJid, command: 'alive', footer: 'footer', botName: 'Red Mini', ownerNumber: '12345678901', getUptime: () => 65 });
   const menuMessage = socket.sent.find(item => item.message.buttons)?.message;
   const pingMessage = socket.sent.find(item => item.message.caption?.includes('PONG'))?.message;
+  const aliveMessage = socket.sent.find(item => item.message.caption?.includes('BOT ONLINE'))?.message;
   assert.equal(menuMessage.image.url, getImageUrl('menu'));
   assert.equal(pingMessage.image.url, getImageUrl('ping'));
   assert.match(pingMessage.caption, /PONG/);
+  assert.equal(aliveMessage.image.url, getImageUrl('welcome'));
+  assert.match(aliveMessage.caption, /Image Theme: Naruto/);
   setActiveImageTheme('Redragon');
 });

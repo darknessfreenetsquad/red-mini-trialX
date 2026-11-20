@@ -19,7 +19,7 @@ function context(isOwner, args = []) {
 after(() => setActiveTheme('silva'));
 
 test('theme files are available and formatting stays compact', () => {
-  assert.deepEqual(listThemes(), ['gold', 'ocean', 'red', 'silva']);
+  assert.deepEqual(listThemes(), ['ocean', 'red', 'silva']);
   assert.equal(setActiveTheme('ocean'), true);
   assert.match(fmt('hello'), /𝙍𝙀𝘿 𝙓𝙈𝘿/);
   assert.match(fmt('hello'), /THEME: ocean/);
@@ -27,12 +27,12 @@ test('theme files are available and formatting stays compact', () => {
 });
 
 test('theme command is owner-only and changes the active theme', async () => {
-  const denied = context(false, ['gold']);
+  const denied = context(false, ['red']);
   await themePlugin.run(denied);
   assert.match(denied.socket.sent[0].text, /Owner only/);
 
-  const owner = context(true, ['gold']);
+  const owner = context(true, ['red']);
   await themePlugin.run(owner);
-  assert.equal(getActiveThemeName(), 'gold');
+  assert.equal(getActiveThemeName(), 'red');
   assert.match(owner.socket.sent[0].text, /THEME UPDATED/);
 });

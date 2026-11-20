@@ -56,6 +56,8 @@ test('.music sends Audio and Document buttons that deliver WhatsApp media', asyn
   await plugin.run(ctx);
   const choice = ctx.socket.sent.at(-1).message;
   assert.equal(choice.buttons.length, 2);
+  assert.match(choice.text, /\.musicaudio/);
+  assert.match(choice.text, /\.musicdoc/);
   const audioToken = choice.buttons[0].buttonId.split(' ')[1];
   const audio = context('musicaudio', [audioToken]);
   await plugin.run(audio);
