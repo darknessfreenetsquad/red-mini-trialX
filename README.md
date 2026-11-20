@@ -40,6 +40,8 @@ Set `OWNER_NUMBER` to an international phone number with digits only if you want
 
 Audius, SoundCloud, and Jamendo may return playable provider media when the response and licensing permit it. Spotify and Apple Music are catalog/link providers; they do not provide a general full-song MP3 API. The bot sends an official link or preview when full media is not available instead of pretending the download succeeded. Configure provider credentials in `.env` or your hosting environment; never commit them.
 
+Group administrators can use `.kick`, `.kickall`, `.mute`, `.open`, and `.adddescription`. `.addstgroup <text>` sends a RED XMD status card to the current group, while the owner can use `.addstchannel <text>` with `NEWSLETTER_JID` configured. `.tgstickers <direct image URL>` converts a direct sticker image into a WhatsApp sticker. Media conversion commands are `.to-url`, `.to-doc`, `.to-music`, and `.to-sticker`; reply to the media when using them. `.spotify <song>` searches Spotify when Spotify credentials are configured. `.update` is an owner-only repository version checker: it reports new commits and tells each deployment owner to pull and restart safely; it never changes a running deployment remotely.
+
 Themes are stored in [`themes/`](themes). The default is `silva`; alternatives include `red` and `ocean`. The owner can run `.theme` to list text themes and `.theme <name>` to switch the active response theme. Use `.imagetheme` for the artwork themes shown on menu, ping, welcome, and alive responses. Outgoing text and media captions use the compact RedDragon formatter.
 
 ## HTTP endpoints

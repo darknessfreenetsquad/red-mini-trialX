@@ -274,6 +274,26 @@ function setupCommandHandlers(socket, sessionNumber) {
       const mode = userConfig.WORK_TYPE || 'public';
       const isOwner = isOwnerMessage(msg.key, socket, sessionNumber);
       if (!isOwner && (mode === 'private' || (mode === 'groups' && !isGroup) || (mode === 'inbox' && isGroup))) return;
+      let groupMetadata = null;
+      let isGroupAdmin = isOwner;
+      let isBotAdmin = false;
+      if (isGroup) {
+        try {
+          groupMetadata = await socket.groupMetadata(from);
+          const numberOf = value => phoneNumberFromJid(value);
+          const senderParticipant = groupMetadata.participants?.find(participant =>
+            participant.id === sender || participant.jid === sender || numberOf(participant.id) === senderNumber
+          );
+          const botNumber = phoneNumberFromJid(socket.user?.id);
+          const botParticipant = groupMetadata.participants?.find(participant =>
+            participant.id === socket.user?.id || participant.jid === socket.user?.id || numberOf(participant.id) === botNumber
+          );
+          isGroupAdmin = isOwner || ['admin', 'superadmin'].includes(senderParticipant?.admin);
+          isBotAdmin = ['admin', 'superadmin'].includes(botParticipant?.admin);
+        } catch (error) {
+          console.error('group metadata lookup failed:', error.message);
+        }
+      }
       const plugin = commandPlugins.get(command);
       if (plugin) {
         await plugin.run({
@@ -287,6 +307,9 @@ function setupCommandHandlers(socket, sessionNumber) {
           sessionNumber,
           isOwner,
           isGroup,
+          isGroupAdmin,
+          isBotAdmin,
+          groupMetadata,
           prefix,
           footer: FOOTER,
           ownerNumber: OWNER_NUMBER,

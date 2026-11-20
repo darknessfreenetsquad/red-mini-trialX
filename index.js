@@ -10,8 +10,9 @@ const { listImageThemes, getActiveImageTheme } = require('./lib/image-themes');
 const COMMAND_GROUPS = [
     { name: 'Downloaders', icon: '⬇️', commands: ['download', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw'] },
     { name: 'Music & Audio', icon: '🎵', commands: ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic'] },
-    { name: 'Tools', icon: '🔧', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair'] },
+    { name: 'Tools', icon: '🔧', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'tgstickers', 'update'] },
     { name: 'Fun & Games', icon: '😄', commands: ['truth', 'dare', 'rps'] },
+    { name: 'Group', icon: '👥', commands: ['kick', 'kickall', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel'] },
     { name: 'Bot Info', icon: '📊', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'theme', 'settheme', 'imagetheme', 'setimage'] },
     { name: 'Owner', icon: '👑', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
 ];

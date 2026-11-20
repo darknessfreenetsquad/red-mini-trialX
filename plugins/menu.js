@@ -7,8 +7,9 @@ const { getImageUrl } = require('../lib/image-themes');
 const CATEGORIES = [
   { icon: '⬇️', name: 'Downloaders', commands: ['download', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw'] },
   { icon: '🎵', name: 'Music & Audio', commands: ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic'] },
-  { icon: '🔧', name: 'Tools', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair'] },
+  { icon: '🔧', name: 'Tools', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'tgstickers', 'update'] },
   { icon: '😄', name: 'Fun & Games', commands: ['truth', 'dare', 'rps'] },
+  { icon: '👥', name: 'Group', commands: ['kick', 'kickall', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel'] },
   { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'theme', 'settheme', 'imagetheme', 'setimage'] },
   { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme'] }
 ];
