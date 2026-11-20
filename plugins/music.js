@@ -9,6 +9,14 @@ function cleanText(value, fallback = 'Unknown') {
   return String(value || fallback).replace(/[\r\n]+/g, ' ').trim();
 }
 
+function sourceUrl(track) {
+  const permalink = String(track.permalink || '').trim();
+  if (/^https:\/\//i.test(permalink)) return permalink;
+  if (permalink.startsWith('/')) return `https://audius.co${permalink}`;
+  if (track.slug) return `https://audius.co/${track.slug}`;
+  return `https://audius.co/track/${track.id}`;
+}
+
 async function searchAudius(query) {
   const phrase = String(query || '').trim();
   if (!phrase) throw new Error('Enter a song or artist name.');
@@ -23,7 +31,7 @@ async function searchAudius(query) {
     title: cleanText(track.title, 'Audius track'),
     artist: cleanText(track.user?.name || track.user?.handle || track.artist, 'Audius artist'),
     duration: Number.isFinite(track.duration) ? track.duration : null,
-    url: track.permalink || (track.slug ? `https://audius.co/${track.slug}` : `https://audius.co/track/${track.id}`),
+    url: sourceUrl(track),
     streamUrl: `${AUDIUS_API_BASE}/tracks/${encodeURIComponent(track.id)}/stream`,
     artwork: track.artwork?.['150x150'] || track.artwork?.['480x480'] || track.artwork?.['1000x1000'] || null,
     downloadable: track.is_downloadable === true

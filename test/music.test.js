@@ -42,7 +42,7 @@ test('Audius search uses the public track-search endpoint and maps a result', as
 });
 
 test('.music searches Audius and sends an audio stream with source attribution', async () => {
-  axios.get = async () => ({ data: { data: [{ id: 'track-123', title: 'Test Song', user: { name: 'Test Artist' }, duration: 187, permalink: 'https://audius.co/test-artist/test-song' }] } });
+  axios.get = async () => ({ data: { data: [{ id: 'track-123', title: 'Test Song', user: { name: 'Test Artist' }, duration: 187, permalink: '/test-artist/test-song' }] } });
   const ctx = context('music');
   await plugin.run(ctx);
   const message = ctx.socket.sent.at(-1).message;
