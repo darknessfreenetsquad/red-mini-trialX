@@ -7,9 +7,12 @@ const { redDragon, cleanFileName } = require('../lib/response-style');
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
 const YOUTUBE_SEARCH_TIMEOUT = 12000;
+const YOUTUBE_FALLBACK_TIMEOUT = 8000;
 const YOUTUBE_CACHE_TTL = 30000;
+const YOUTUBE_STALE_TTL = 10 * 60 * 1000;
 const YOUTUBE_CACHE_LIMIT = 100;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const YOUTUBE_SEARCH_FALLBACK_URL = process.env.YOUTUBE_SEARCH_FALLBACK_URL || '';
 const youtubeSearchCache = new Map();
 
 function clean(value, fallback = 'Unknown') {
@@ -113,26 +116,63 @@ async function searchSong(query) {
   return get('/Search/searchthatsong', { action: 'search', query });
 }
 
+function withTimeout(promise, milliseconds, message) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), milliseconds);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function directYouTubeResult(query) {
+  const url = String(query || '').trim();
+  if (!/^https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//i.test(url)) return null;
+  return { videos: [{ url, title: 'YouTube audio', videoId: url }] };
+}
+
+async function fallbackYouTubeSearch(query) {
+  const direct = directYouTubeResult(query);
+  if (direct) return direct;
+  if (!YOUTUBE_SEARCH_FALLBACK_URL) return null;
+  const { data } = await axios.get(YOUTUBE_SEARCH_FALLBACK_URL, {
+    timeout: YOUTUBE_FALLBACK_TIMEOUT,
+    params: { q: query, query }
+  });
+  const videos = Array.isArray(data?.videos) ? data.videos
+    : Array.isArray(data?.data?.videos) ? data.data.videos
+      : Array.isArray(data?.result) ? data.result : [];
+  return { videos: videos.filter(video => video?.url).slice(0, 10), fallback: true };
+}
+
 async function searchYouTube(query) {
   const key = String(query || '').trim().toLowerCase();
   if (!key) return { videos: [] };
   const cached = youtubeSearchCache.get(key);
   if (cached?.promise) return cached.promise;
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-
-  const promise = Promise.race([
-    yts(key),
-    new Promise((_, reject) => setTimeout(() => reject(new Error('YouTube search timed out.')), YOUTUBE_SEARCH_TIMEOUT))
-  ]).then(result => {
+  const primary = withTimeout(yts(key), YOUTUBE_SEARCH_TIMEOUT, 'YouTube search timed out.');
+  const fallbackAvailable = Boolean(YOUTUBE_SEARCH_FALLBACK_URL || directYouTubeResult(key));
+  const searchRequest = fallbackAvailable
+    ? Promise.race([primary, withTimeout(fallbackYouTubeSearch(key), YOUTUBE_FALLBACK_TIMEOUT, 'YouTube fallback search timed out.')])
+    : primary;
+  const previousValue = cached?.value;
+  const previousStaleUntil = cached?.staleUntil || 0;
+  const promise = searchRequest.then(result => {
     const value = result && Array.isArray(result.videos) ? result : { videos: [] };
-    youtubeSearchCache.set(key, { value, expiresAt: Date.now() + YOUTUBE_CACHE_TTL });
+    youtubeSearchCache.set(key, { value, expiresAt: Date.now() + YOUTUBE_CACHE_TTL, staleUntil: Date.now() + YOUTUBE_STALE_TTL });
     while (youtubeSearchCache.size > YOUTUBE_CACHE_LIMIT) youtubeSearchCache.delete(youtubeSearchCache.keys().next().value);
     return value;
+  }).catch(async error => {
+    const current = youtubeSearchCache.get(key);
+    if (current?.value && current.staleUntil > Date.now()) return { ...current.value, stale: true };
+    const fallback = await fallbackYouTubeSearch(key).catch(() => null);
+    if (fallback?.videos?.length) return fallback;
+    throw error;
   }).finally(() => {
     const current = youtubeSearchCache.get(key);
     if (current?.promise === promise) youtubeSearchCache.delete(key);
   });
-  youtubeSearchCache.set(key, { promise, expiresAt: Date.now() + YOUTUBE_SEARCH_TIMEOUT });
+  youtubeSearchCache.set(key, { promise, value: previousValue, staleUntil: previousStaleUntil, expiresAt: Date.now() + YOUTUBE_SEARCH_TIMEOUT });
   return promise;
 }
 
