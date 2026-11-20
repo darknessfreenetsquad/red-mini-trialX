@@ -13,6 +13,7 @@ const pino = require('pino');
 const moment = require('moment-timezone');
 const axios = require('axios');
 const cheerio = require('cheerio');
+const EXTERNAL_REQUEST_TIMEOUT = 15000;
 const { createClient } = require('@supabase/supabase-js');
 const { useFileAuthState, removeFileAuthState, useSupabaseAuthState } = require('./auth-state');
 const localStore = require('./local-store');
@@ -491,7 +492,7 @@ ${FOOTER}`;
 
         try {
           const apiUrl = `https://api.siputzx.my.id/api/download/fb?url=${encodeURIComponent(url)}`;
-          const { data } = await axios.get(apiUrl);
+          const { data } = await axios.get(apiUrl, { timeout: EXTERNAL_REQUEST_TIMEOUT });
 
           if (!data.result?.hd) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch video' }, { quoted: msg });
@@ -521,7 +522,7 @@ ${FOOTER}`;
 
         try {
           const apiUrl = `https://api.siputzx.my.id/api/download/ig?url=${encodeURIComponent(url)}`;
-          const { data } = await axios.get(apiUrl);
+          const { data } = await axios.get(apiUrl, { timeout: EXTERNAL_REQUEST_TIMEOUT });
 
           if (!data.result?.url) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch media' }, { quoted: msg });
@@ -552,7 +553,7 @@ ${FOOTER}`;
 
         try {
           const apiUrl = `https://api.siputzx.my.id/api/download/tiktok?url=${encodeURIComponent(url)}`;
-          const { data } = await axios.get(apiUrl);
+          const { data } = await axios.get(apiUrl, { timeout: EXTERNAL_REQUEST_TIMEOUT });
 
           if (!data.result?.video) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch video' }, { quoted: msg });
@@ -582,7 +583,7 @@ ${FOOTER}`;
 
         try {
           const apiUrl = `https://api.siputzx.my.id/api/download/twitter?url=${encodeURIComponent(url)}`;
-          const { data } = await axios.get(apiUrl);
+          const { data } = await axios.get(apiUrl, { timeout: EXTERNAL_REQUEST_TIMEOUT });
 
           if (!data.result?.hd) {
             await socket.sendMessage(from, { text: '❌ Failed to fetch video' }, { quoted: msg });
@@ -615,7 +616,7 @@ ${FOOTER}`;
             return;
           }
           const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${apiKey}&units=metric`;
-          const { data } = await axios.get(url);
+          const { data } = await axios.get(url, { timeout: EXTERNAL_REQUEST_TIMEOUT });
 
           const weatherText = `🌤️ *Weather in ${data.name}, ${data.sys.country}*
 ━━━━━━━━━━━━━━━━━━
@@ -646,7 +647,7 @@ ${FOOTER}`;
 
         try {
           const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${lang}&dt=t&q=${encodeURIComponent(text)}`;
-          const { data } = await axios.get(url);
+          const { data } = await axios.get(url, { timeout: EXTERNAL_REQUEST_TIMEOUT });
           const translated = data[0].map(part => part[0] || '').join('');
 
           await socket.sendMessage(from, {
@@ -689,7 +690,7 @@ ${FOOTER}`;
         }
 
         try {
-          const { data } = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(link)}`);
+          const { data } = await axios.get(`https://tinyurl.com/api-create.php?url=${encodeURIComponent(link)}`, { timeout: EXTERNAL_REQUEST_TIMEOUT });
           await socket.sendMessage(from, {
             text: `🔗 *URL Shortened*\n━━━━━━━━━━━━━━━━━━\n🔗 Original: ${link}\n📎 Shortened: ${data}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`
           }, { quoted: msg });
@@ -708,7 +709,7 @@ ${FOOTER}`;
         }
 
         try {
-          const { data } = await axios.get(`https://api.github.com/users/${user}`);
+          const { data } = await axios.get(`https://api.github.com/users/${user}`, { timeout: EXTERNAL_REQUEST_TIMEOUT });
           const profileText = `🐙 *GitHub Profile*\n━━━━━━━━━━━━━━━━━━\n👤 Name: ${data.name || 'N/A'}\n🔖 Username: ${data.login}\n📦 Repos: ${data.public_repos}\n👥 Followers: ${data.followers}\n🔗 URL: ${data.html_url}\n━━━━━━━━━━━━━━━━━━\n${FOOTER}`;
 
           await socket.sendMessage(from, {
@@ -887,7 +888,7 @@ ${FOOTER}`;
         }
 
         try {
-          const response = await axios.get(`https://www.google.com/search?q=${encodeURIComponent(query)}`);
+          const response = await axios.get(`https://www.google.com/search?q=${encodeURIComponent(query)}`, { timeout: EXTERNAL_REQUEST_TIMEOUT });
           const $ = cheerio.load(response.data);
           const results = [];
 
