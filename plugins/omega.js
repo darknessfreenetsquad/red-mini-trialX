@@ -6,7 +6,11 @@ const { redDragon, cleanFileName } = require('../lib/response-style');
 
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
+const YOUTUBE_SEARCH_TIMEOUT = 12000;
+const YOUTUBE_CACHE_TTL = 30000;
+const YOUTUBE_CACHE_LIMIT = 100;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const youtubeSearchCache = new Map();
 
 function clean(value, fallback = 'Unknown') {
   return String(value ?? fallback).replace(/[\r\n]+/g, ' ').trim();
@@ -110,7 +114,26 @@ async function searchSong(query) {
 }
 
 async function searchYouTube(query) {
-  return yts(query);
+  const key = String(query || '').trim().toLowerCase();
+  if (!key) return { videos: [] };
+  const cached = youtubeSearchCache.get(key);
+  if (cached?.promise) return cached.promise;
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const promise = Promise.race([
+    yts(key),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('YouTube search timed out.')), YOUTUBE_SEARCH_TIMEOUT))
+  ]).then(result => {
+    const value = result && Array.isArray(result.videos) ? result : { videos: [] };
+    youtubeSearchCache.set(key, { value, expiresAt: Date.now() + YOUTUBE_CACHE_TTL });
+    while (youtubeSearchCache.size > YOUTUBE_CACHE_LIMIT) youtubeSearchCache.delete(youtubeSearchCache.keys().next().value);
+    return value;
+  }).finally(() => {
+    const current = youtubeSearchCache.get(key);
+    if (current?.promise === promise) youtubeSearchCache.delete(key);
+  });
+  youtubeSearchCache.set(key, { promise, expiresAt: Date.now() + YOUTUBE_SEARCH_TIMEOUT });
+  return promise;
 }
 
 async function downloadPlayAudio(url) {
