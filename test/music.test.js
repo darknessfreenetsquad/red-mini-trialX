@@ -44,7 +44,7 @@ test('Audius search maps the public result and clickable source URL', async () =
 
 test('all five providers are registered and old YouTube aliases are absent', () => {
   assert.deepEqual(plugin.commands, ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'musicaudio', 'musicdoc']);
-  for (const alias of ['play', 'video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'play3', 'song2']) assert.equal(plugin.commands.includes(alias), false, alias);
+  for (const alias of ['video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'play3', 'song2']) assert.equal(plugin.commands.includes(alias), false, alias);
   assert.deepEqual(plugin.PROVIDER_ORDER, ['audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic']);
 });
 

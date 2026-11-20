@@ -357,6 +357,7 @@ function setupCommandHandlers(socket, sessionNumber) {
 ╰─────────────────────╯
 
 ╭───❰ 📥 DOWNLOADER ❱───╮
+│ 🎧 ${prefix}play <song or artist>
 │ 🎵 ${prefix}music <song or artist>
 │ 📘 ${prefix}fb <url>
 │ 🎨 ${prefix}sticker

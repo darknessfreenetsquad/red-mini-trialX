@@ -9,7 +9,7 @@ const { listImageThemes, getActiveImageTheme } = require('./lib/image-themes');
 
 const COMMAND_GROUPS = [
     { name: 'Downloaders', icon: '⬇️', commands: ['download', 'movie', 'movies', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw', 'ytdl', 'ytvideo', 'ytaudio'] },
-    { name: 'Music & Audio', icon: '🎵', commands: ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija'] },
+    { name: 'Music & Audio', icon: '🎵', commands: ['play', 'music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija'] },
     { name: 'Anime', icon: '🎬', commands: ['anime', 'crunchyroll'] },
     { name: 'Tools', icon: '🔧', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'tgstickers', 'update'] },
     { name: 'Fun & Games', icon: '😄', commands: ['truth', 'dare', 'rps'] },

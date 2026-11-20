@@ -22,10 +22,10 @@ function ctx(command, args = []) {
 
 test('plugin loader exposes migrated non-menu commands', () => {
   const registry = loadPlugins();
-  for (const command of ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'ytdl', 'ytvideo', 'ytaudio', 'kick', 'kickall', 'tgstickers', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'update', 'statusview', 'download', 'movie', 'movies', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'imagetheme', 'setimage']) {
+  for (const command of ['play', 'music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'ytdl', 'ytvideo', 'ytaudio', 'kick', 'kickall', 'tgstickers', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'update', 'statusview', 'download', 'movie', 'movies', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'imagetheme', 'setimage']) {
     assert.ok(registry.has(command), command);
   }
-  for (const command of ['play', 'video', 'ytmp3', 'ytmp4', 'ytmpdoc', 'yta', 'ytv', 'play3', 'song2']) {
+  for (const command of ['video', 'ytmp3', 'ytmp4', 'ytmpdoc', 'yta', 'ytv', 'play3', 'song2']) {
     assert.equal(registry.has(command), false, `${command} should be removed`);
   }
   assert.ok(registry.has('menu'), 'existing menu plugin remains available');
@@ -91,6 +91,51 @@ test('Omegatech commands map search, trending, anime, and YouTube metadata safel
   assert.match(anime.socket.sent.at(-1).text, /GY9PJ5KWR/);
   const youtube = ctx('ytdl', ['https://youtu.be/test']); await omega.run(youtube);
   assert.match(youtube.socket.sent.at(-1).text, /Test video/);
+});
+
+test('Omegatech play searches YouTube Music and sends the returned audio stream', async () => {
+  const calls = [];
+  axios.get = async (url, options) => {
+    calls.push({ url, options });
+    assert.match(url, /api\.omegatech\.app\/api\/download\/play/);
+    assert.equal(options.timeout, 15000);
+    if (options.params.action === 'search') {
+      return { data: { success: true, data: { query: 'Alan Walker', songs: [{ videoId: 'music-123', title: 'Test Song', artist: 'Test Artist', url: 'https://music.youtube.com/watch?v=music-123' }] } } };
+    }
+    assert.equal(options.params.action, 'play');
+    assert.equal(options.params.videoId, 'music-123');
+    return { data: { success: true, data: { videoId: 'music-123', title: 'Test Song', artist: 'Test Artist', streams: [{ format: 'mp3', url: 'https://cdn.test/test-song.mp3' }] } } };
+  };
+
+  const play = ctx('play', ['Alan', 'Walker']);
+  await omega.run(play);
+  const message = play.socket.sent.at(-1);
+  assert.equal(message.audio.url, 'https://cdn.test/test-song.mp3');
+  assert.equal(message.mimetype, 'audio/mpeg');
+  assert.match(message.caption, /Test Song/);
+  assert.deepEqual(calls.map(call => call.options.params.action), ['search', 'play']);
+});
+
+test('Omegatech play falls back to the existing YouTube audio endpoint when conversion is unavailable', async () => {
+  const calls = [];
+  axios.get = async (url, options) => {
+    calls.push({ url, options });
+    assert.equal(options.timeout, 15000);
+    if (url.endsWith('/download/play') && options.params.action === 'play') {
+      return { data: { success: true, data: { title: 'Fallback Song', streams: [] } } };
+    }
+    if (url.endsWith('/download/play') && options.params.action === 'download') {
+      return { data: { success: false, error: 'audio_conversion_failed_for_all_formats' } };
+    }
+    assert.match(url, /\/download\/YouTube$/);
+    assert.equal(options.params.type, 'audio');
+    assert.match(options.params.url, /youtube\.com\/watch\?v=music-456/);
+    return { data: { success: true, data: { title: 'Fallback Song', audio: { mp3: { downloadUrl: 'https://cdn.test/fallback.mp3' } } } } };
+  };
+
+  const result = await omega.playSong('music-456');
+  assert.equal(result.audioUrl, 'https://cdn.test/fallback.mp3');
+  assert.deepEqual(calls.map(call => new URL(call.url).pathname), ['/api/download/play', '/api/download/play', '/api/download/YouTube']);
 });
 
 test('Omegatech YouTube video command enforces the 50 MB limit', async () => {
