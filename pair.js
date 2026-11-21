@@ -176,6 +176,18 @@ function guardSocketSender(socket, number) {
   };
 }
 
+async function sendWithTimeout(socket, jid, message, options, timeoutMs = 8000) {
+  let timer;
+  try {
+    return await Promise.race([
+      socket.sendMessage(jid, message, options),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Message send timed out')), timeoutMs); })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function safeCommandReaction(socket, jid, key, text) {
   try {
     await socket.sendMessage(jid, { react: { text, key } });
@@ -1203,12 +1215,18 @@ async function EmpirePair(number, requestCode = false) {
         connectingSockets.delete(number);
         activeSockets.set(number, socket);
         entry.opening = (async () => {
+          const connectedText = `🔴 *RED MINI BOT CONNECTED* 🔴\n✅ Connected: +${number}\n⏱️ Time: ${getSouthAfricaTimestamp()}\n🎨 Image theme is active\n${FOOTER}`;
           try {
             await addNumberToSupabase(number);
-            await socket.sendMessage(socket.user.id, {
-              image: { url: BOT_IMAGE },
-              caption: `🔴 *Red Mini Bot Activated* 🔴\n✅ Connected: +${number}\n⏱️ Time: ${getSouthAfricaTimestamp()}\n${FOOTER}`
-            });
+            try {
+              await sendWithTimeout(socket, socket.user.id, {
+                image: { url: getImageUrl('welcome') },
+                caption: connectedText
+              });
+            } catch (mediaError) {
+              console.warn('Connected artwork failed; sending text notification:', mediaError.message);
+              await sendWithTimeout(socket, socket.user.id, { text: connectedText });
+            }
           } catch (err) {
             console.error('Connection setup failed:', err.message);
           }

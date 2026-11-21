@@ -2,7 +2,7 @@
 
 const { loadPlugins } = require('../plugin-loader');
 const { getHeader, getFooter } = require('../lib/theme');
-const { getImageUrl } = require('../lib/image-themes');
+const { getImageUrl, getActiveImageTheme } = require('../lib/image-themes');
 
 const CATEGORIES = [
   { icon: '⬇️', name: 'Downloaders', commands: ['download', 'movie', 'movies', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw', 'ytdl', 'ytvideo', 'ytaudio'] },
@@ -65,6 +65,7 @@ module.exports = {
   async run(ctx) {
     const { socket, msg, from, prefix } = ctx;
     const menuText = buildMenu(prefix);
+    const theme = getActiveImageTheme()?.name || 'Redragon';
     const buttons = [
       { buttonId: `${prefix}alive`, buttonText: { displayText: 'ALIVE' }, type: 1 },
       { buttonId: `${prefix}ping`, buttonText: { displayText: 'PING' }, type: 1 },
@@ -77,12 +78,12 @@ module.exports = {
     try {
       await sendWithTimeout(socket, from, {
         image: { url: getImageUrl('menu') },
-        caption: menuText,
+        caption: `${menuText}\n🎨 Image Theme: ${theme}`,
         buttons
       }, { quoted: msg });
     } catch (error) {
       console.error('Menu buttons failed; sending text fallback:', error.message);
-      await sendWithTimeout(socket, from, { text: menuText }, { quoted: msg });
+      await sendWithTimeout(socket, from, { text: `${menuText}\n🎨 Image Theme: ${theme}` }, { quoted: msg });
     }
   }
 };

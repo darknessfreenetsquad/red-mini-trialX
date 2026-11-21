@@ -24,7 +24,8 @@ module.exports = {
       await socket.sendMessage(from, { react: { text: '⏳', key: msg.key } });
       const latency = Date.now() - started;
       const speed = latency < 100 ? 'Excellent' : latency < 300 ? 'Good' : 'Slow';
-      const pong = redDragon('PONG', [`Latency: ${latency}ms`, `Speed: ${speed}`], footer);
+      const theme = getActiveImageTheme()?.name || 'Redragon';
+      const pong = redDragon('PONG', [`Latency: ${latency}ms`, `Speed: ${speed}`, `Image Theme: ${theme}`], footer);
       try {
         await sendWithTimeout(socket, from, { image: { url: getImageUrl('ping') }, caption: pong }, { quoted: msg });
       } catch (error) {
