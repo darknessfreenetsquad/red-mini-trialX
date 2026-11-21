@@ -42,6 +42,13 @@ test('Audius search maps the public result and clickable source URL', async () =
   assert.equal(result.audioUrl, 'https://api.audius.co/v1/tracks/track-123/stream');
 });
 
+test('Audius search accepts the live track_id response field', async () => {
+  axios.get = async () => ({ data: { data: [{ track_id: 880254, title: 'Live Track', user: { name: 'Artist' } }] } });
+  const result = await plugin.searchAudius('live track');
+  assert.equal(result.id, '880254');
+  assert.equal(result.audioUrl, 'https://api.audius.co/v1/tracks/880254/stream');
+});
+
 test('all five providers are registered and old YouTube aliases are absent', () => {
   assert.deepEqual(plugin.commands, ['music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'musicaudio', 'musicdoc']);
   for (const alias of ['video', 'yta', 'ytv', 'ytmp3', 'ytmp4', 'play3', 'song2']) assert.equal(plugin.commands.includes(alias), false, alias);

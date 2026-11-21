@@ -3,6 +3,22 @@
 const axios = require('axios');
 const { redDragon } = require('../lib/response-style');
 
+function findMediaUrl(value) {
+  if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
+  if (Array.isArray(value)) {
+    for (const item of value) { const url = findMediaUrl(item); if (url) return url; }
+  }
+  if (value && typeof value === 'object') {
+    for (const key of ['video', 'video_hd', 'hd', 'downloadUrl', 'download_url', 'download', 'url']) {
+      const url = findMediaUrl(value[key]); if (url) return url;
+    }
+    for (const key of ['data', 'result', 'media']) {
+      const url = findMediaUrl(value[key]); if (url) return url;
+    }
+  }
+  return null;
+}
+
 module.exports = {
   commands: ['download'],
   async run(ctx) {
@@ -22,8 +38,8 @@ module.exports = {
         timeout: 45000,
         params: { url }
       });
-      const mediaUrl = data?.result?.video?.[0]?.url;
-      if (!data?.success || !/^https:\/\//i.test(mediaUrl || '')) throw new Error('No downloadable video was returned.');
+      const mediaUrl = findMediaUrl(data);
+      if (data?.success === false || !mediaUrl) throw new Error('No downloadable video was returned.');
       await socket.sendMessage(from, {
         video: { url: mediaUrl },
         caption: redDragon('DOWNLOAD COMPLETE', ['Media sent successfully.'], footer)

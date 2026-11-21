@@ -7,12 +7,26 @@ const { redDragon } = require('../lib/response-style');
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CONFIG_PATH = path.join(DATA_DIR, 'protection.json');
 const store = new Map();
+let cachedConfig = null;
+let cachedMtimeMs = -1;
 
 function config() {
-  try { return { antidelete: false, antilink: false, antilinkAction: 'delete', ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) }; }
-  catch { return { antidelete: false, antilink: false, antilinkAction: 'delete' }; }
+  try {
+    const mtimeMs = fs.statSync(CONFIG_PATH).mtimeMs;
+    if (cachedConfig && cachedMtimeMs === mtimeMs) return cachedConfig;
+    cachedConfig = { antidelete: false, antilink: false, antilinkAction: 'delete', ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) };
+    cachedMtimeMs = mtimeMs;
+  } catch {
+    cachedConfig ||= { antidelete: false, antilink: false, antilinkAction: 'delete' };
+  }
+  return cachedConfig;
 }
-function save(value) { fs.mkdirSync(DATA_DIR, { recursive: true }); fs.writeFileSync(CONFIG_PATH, JSON.stringify(value, null, 2)); }
+function save(value) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(value, null, 2));
+  cachedConfig = value;
+  try { cachedMtimeMs = fs.statSync(CONFIG_PATH).mtimeMs; } catch { cachedMtimeMs = -1; }
+}
 function textOf(msg) {
   const m = msg?.message || {};
   return m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '';

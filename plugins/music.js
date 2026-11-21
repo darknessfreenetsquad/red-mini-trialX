@@ -47,9 +47,10 @@ function result(provider, track, fields = {}) {
 async function searchAudius(query) {
   const { data } = await axios.get(`${AUDIUS_API_BASE}/tracks/search`, { timeout: 15000, params: { query, limit: 1 } });
   const track = data?.data?.[0];
-  if (!track?.id) return null;
+  const trackId = track?.id || track?.track_id;
+  if (!trackId) return null;
   return result('audius', track, {
-    audioUrl: `${AUDIUS_API_BASE}/tracks/${encodeURIComponent(track.id)}/stream`
+    audioUrl: `${AUDIUS_API_BASE}/tracks/${encodeURIComponent(trackId)}/stream`
   });
 }
 
@@ -158,6 +159,14 @@ const PROVIDERS = {
 };
 const PROVIDER_ORDER = Object.keys(PROVIDERS);
 
+function providerConfigured(name) {
+  if (name === 'soundcloud') return Boolean(process.env.SOUNDCLOUD_CLIENT_ID && process.env.SOUNDCLOUD_CLIENT_SECRET);
+  if (name === 'jamendo') return Boolean(process.env.JAMENDO_CLIENT_ID);
+  if (name === 'spotify') return Boolean(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
+  if (name === 'applemusic') return Boolean(process.env.APPLE_MUSIC_DEVELOPER_TOKEN);
+  return true;
+}
+
 async function searchMusic(query, requestedProvider = '') {
   const collected = await collectMusicResults(query, requestedProvider);
   return { item: collected.items[0] || null, failures: collected.failures };
@@ -166,7 +175,7 @@ async function searchMusic(query, requestedProvider = '') {
 async function collectMusicResults(query, requestedProvider = '') {
   const phrase = String(query || '').trim();
   if (!phrase) throw new Error('Enter a song or artist name.');
-  const names = requestedProvider ? [requestedProvider] : PROVIDER_ORDER;
+  const names = requestedProvider ? [requestedProvider] : PROVIDER_ORDER.filter(providerConfigured);
   const failures = [];
   const items = [];
   const results = await Promise.all(names.map(async name => {

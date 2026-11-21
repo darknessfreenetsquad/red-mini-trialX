@@ -152,3 +152,9 @@ test('Omegatech YouTube video command enforces the 50 MB limit', async () => {
   assert.match(video.socket.sent.at(-1).text, /50 MB/);
   assert.equal(video.socket.sent.at(-1).video, undefined);
 });
+
+test('YouTube video selection accepts alternate URL and size fields', () => {
+  const selected = omega.chooseVideo([{ label: '360p', height: 360, sizeLabel: '26.8 MB', url: 'https://cdn.test/video.mp4' }]);
+  assert.equal(selected.downloadUrl, 'https://cdn.test/video.mp4');
+  assert.equal(selected.sizeBytes, 26.8 * 1024 * 1024);
+});

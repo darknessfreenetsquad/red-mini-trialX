@@ -61,6 +61,8 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 const storageMode = supabase ? 'supabase' : 'local';
+const userConfigCache = new Map();
+const USER_CONFIG_CACHE_TTL = 30 * 1000;
 
 console.log(`Storage backend: ${storageMode}${supabase ? '' : ` (${localStore.DATA_DIR})`}`);
 
@@ -97,13 +99,22 @@ async function checked(query, context) {
   return result.data;
 }
 async function loadUserConfigFromSupabase(number) {
-  if (!supabase) return localStore.getConfig(number);
-  const data = await checked(supabase.from('configs').select('config').eq('number', number).maybeSingle(), 'Unable to load config');
-  return data?.config || null;
+  const key = String(number || '');
+  const cached = userConfigCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  let value;
+  if (!supabase) value = await localStore.getConfig(number);
+  else {
+    const data = await checked(supabase.from('configs').select('config').eq('number', number).maybeSingle(), 'Unable to load config');
+    value = data?.config || null;
+  }
+  userConfigCache.set(key, { value, expiresAt: Date.now() + USER_CONFIG_CACHE_TTL });
+  return value;
 }
 async function setUserConfigInSupabase(number, configObj) {
-  if (!supabase) return localStore.setConfig(number, configObj);
-  await checked(supabase.from('configs').upsert({ number, config: configObj, updated_at: new Date().toISOString() }), 'Unable to save config');
+  if (!supabase) await localStore.setConfig(number, configObj);
+  else await checked(supabase.from('configs').upsert({ number, config: configObj, updated_at: new Date().toISOString() }), 'Unable to save config');
+  userConfigCache.set(String(number || ''), { value: configObj, expiresAt: Date.now() + USER_CONFIG_CACHE_TTL });
 }
 async function loadAdminsFromSupabase() {
   if (!supabase) return localStore.listAdmins();

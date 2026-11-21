@@ -25,17 +25,19 @@ function requireText(args, usage) {
   return text.slice(0, 300);
 }
 
-function ensureSuccess(payload) {
-  if (!payload?.success) {
+function ensureSuccess(payload, httpStatus = 200) {
+  if (httpStatus >= 400 || payload?.success === false || payload?.status === false) {
     const error = payload?.error || payload?.message || 'Omegatech request failed.';
     throw new Error(clean(error, 'Omegatech request failed.'));
   }
-  return payload.data || {};
+  if (payload?.data && typeof payload.data === 'object') return payload.data;
+  if (payload?.result && typeof payload.result === 'object') return payload.result;
+  return payload && typeof payload === 'object' ? payload : {};
 }
 
 async function get(path, params) {
-  const { data } = await axios.get(`${OMEGA_BASE}${path}`, { timeout: REQUEST_TIMEOUT, params });
-  return ensureSuccess(data);
+  const { data, status } = await axios.get(`${OMEGA_BASE}${path}`, { timeout: REQUEST_TIMEOUT, params });
+  return ensureSuccess(data, status);
 }
 
 function linesForSongSearch(data) {
@@ -91,8 +93,21 @@ function bytesLabel(bytes) {
 
 function chooseVideo(formats) {
   return formats
-    .filter(format => format?.downloadUrl && Number.isFinite(format.sizeBytes) && format.sizeBytes <= MAX_VIDEO_BYTES)
+    .map(format => {
+      const url = format?.downloadUrl || format?.download_url || format?.url;
+      const sizeBytes = Number.isFinite(format?.sizeBytes) ? format.sizeBytes : parseSizeBytes(format?.sizeBytes || format?.sizeLabel || format?.size);
+      return url ? { ...format, downloadUrl: url, sizeBytes } : null;
+    })
+    .filter(format => format && (!Number.isFinite(format.sizeBytes) || format.sizeBytes <= MAX_VIDEO_BYTES))
     .sort((a, b) => Number(b.height || 0) - Number(a.height || 0))[0] || null;
+}
+
+function parseSizeBytes(value) {
+  if (Number.isFinite(value)) return value;
+  const match = String(value || '').match(/([\d.]+)\s*(GB|MB|KB|B)/i);
+  if (!match) return null;
+  const units = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 };
+  return Number(match[1]) * units[match[2].toUpperCase()];
 }
 
 function youtubeLines(data) {
@@ -177,14 +192,30 @@ async function searchYouTube(query) {
 }
 
 async function downloadPlayAudio(url) {
-  const { data } = await axios.get('https://apis-keith.vercel.app/download/dlmp3', {
-    timeout: REQUEST_TIMEOUT,
-    params: { url }
-  });
-  if (!data?.status || !data?.result || !data.result.downloadUrl) {
-    throw new Error('Failed to fetch audio from the API. Please try again later.');
+  let lastError;
+  try {
+    const { data, status } = await axios.get('https://apis-keith.vercel.app/download/dlmp3', {
+      timeout: 8000,
+      validateStatus: () => true,
+      params: { url }
+    });
+    const result = data?.result || data?.data || data;
+    const downloadUrl = result?.downloadUrl || result?.download_url || result?.url || result?.audio;
+    if (status < 400 && data?.status !== false && /^https?:\/\//i.test(downloadUrl || '')) {
+      return { ...result, downloadUrl };
+    }
+    lastError = new Error('Keith API returned no audio URL.');
+  } catch (error) {
+    lastError = error;
   }
-  return data.result;
+  try {
+    const data = await get('/download/YouTube', { action: 'download', url, type: 'audio', bitrate: 128 });
+    const downloadUrl = data?.audio?.mp3?.downloadUrl || data?.audio?.m4a?.downloadUrl || data?.downloadUrl || data?.download_url || data?.url;
+    if (!/^https?:\/\//i.test(downloadUrl || '')) throw new Error('Omegatech returned no audio URL.');
+    return { ...data, downloadUrl, title: data.title || 'YouTube audio' };
+  } catch (error) {
+    throw new Error(`Audio download failed: ${error.message || lastError?.message || 'provider unavailable'}`);
+  }
 }
 
 async function trendingSongs() {
