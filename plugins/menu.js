@@ -14,8 +14,20 @@ const CATEGORIES = [
   { icon: '📊', name: 'Bot Info', commands: ['alive', 'ping', 'profile', 'stats', 'setting', 'imagetheme', 'setimage', 'statusview'] },
   { icon: '👑', name: 'Owner', commands: ['broadcast', 'admin', 'newsletter', 'deleteme', 'sudo'] }
 ];
-const BAR = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
+const BAR = '┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄';
 const HIDDEN_COMMANDS = new Set(['musicaudio', 'musicdoc']);
+
+async function sendWithTimeout(socket, jid, message, options, timeoutMs = 5000) {
+  let timer;
+  try {
+    return await Promise.race([
+      socket.sendMessage(jid, message, options),
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Message send timed out')), timeoutMs); })
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function buildMenu(prefix) {
   const registry = loadPlugins();
@@ -63,14 +75,14 @@ module.exports = {
 
     await socket.sendMessage(from, { react: { text: '🔴', key: msg.key } });
     try {
-      await socket.sendMessage(from, {
+      await sendWithTimeout(socket, from, {
         image: { url: getImageUrl('menu') },
         caption: menuText,
         buttons
       }, { quoted: msg });
     } catch (error) {
       console.error('Menu buttons failed; sending text fallback:', error.message);
-      await socket.sendMessage(from, { text: menuText }, { quoted: msg });
+      await sendWithTimeout(socket, from, { text: menuText }, { quoted: msg });
     }
   }
 };
