@@ -9,7 +9,7 @@ Supabase is optional. By default, Red Mini stores WhatsApp credentials, Signal k
 1. Use Node.js 22 or newer and install dependencies with `npm ci`.
 2. Copy `.env.example` to `.env`. The important setting is `DATA_DIR=./data`.
 3. Start with `node --env-file=.env index.js` or `npm start`.
-4. Open `/pair`, enter the full WhatsApp number with country code, and enter the generated code in WhatsApp under **Linked devices → Link a device → Link with phone number**.
+4. Open `/pair`, enter the full WhatsApp number with country code, then on your main phone open **WhatsApp → Settings → Linked devices → Link a device → Link with phone number instead** and enter the fresh code there. Do not send the code in a chat; request a new one if it expires.
 5. After linking, the bot is ready for commands. The linked device appears as a Safari/macOS web session.
 
 Keep `DATA_DIR` private. It contains WhatsApp session credentials and Signal keys. Do not commit, upload, or share it. Use HTTPS and protect the open dashboard with a private URL, reverse-proxy authentication, VPN, or network rules before public exposure.
