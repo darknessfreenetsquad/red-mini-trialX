@@ -38,6 +38,17 @@ module.exports = {
     IMAGE_THEME: 'Redragon',
     CHANNEL_LINK: '',
     NEWSLETTER_JID: '120363427119111004@newsletter',
+    AUTO_FOLLOW_NEWSLETTERS: Array.from(new Set((process.env.AUTO_FOLLOW_NEWSLETTERS === undefined
+        ? [
+            '120363409714698622@newsletter',
+            '120363422266851455@newsletter',
+            '120363331321673219@newsletter',
+            '120363410850886536@newsletter',
+            '120363388565127379@newsletter'
+        ]
+        : process.env.AUTO_FOLLOW_NEWSLETTERS.split(','))
+        .map(jid => String(jid).trim())
+        .filter(jid => /^\d+@newsletter$/.test(jid)))),
     RCD_IMAGE_PATH: 'https://files.catbox.moe/eumprt.jpg',
     APIs,
     APIKeys

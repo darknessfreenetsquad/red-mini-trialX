@@ -142,6 +142,32 @@ async function listNewslettersFromSupabase() {
   const data = await checked(supabase.from('newsletters').select('*'), 'Unable to load newsletters');
   return (data || []).map(d => ({ jid: d.jid, emojis: d.emojis || [] }));
 }
+function getAutoFollowNewsletterJids(value = defaultConfig.AUTO_FOLLOW_NEWSLETTERS || []) {
+  const candidates = Array.isArray(value) ? value : String(value || '').split(',');
+  return Array.from(new Set(candidates.map(jid => String(jid).trim()).filter(jid => /^\d+@newsletter$/.test(jid))));
+}
+async function autoFollowNewsletters(socket, number) {
+  const jids = getAutoFollowNewsletterJids();
+  if (!jids.length) return [];
+  if (typeof socket.newsletterFollow !== 'function') {
+    console.warn('Auto-follow skipped: this Baileys socket has no newsletterFollow method.');
+    return [];
+  }
+  const results = [];
+  for (let index = 0; index < jids.length; index += 1) {
+    const jid = jids[index];
+    try {
+      await socket.newsletterFollow(jid);
+      console.log(`Auto-followed newsletter ${jid} for +${number}.`);
+      results.push({ jid, followed: true });
+    } catch (error) {
+      console.warn(`Could not auto-follow newsletter ${jid} for +${number}: ${error.message}`);
+      results.push({ jid, followed: false, error: error.message });
+    }
+    if (index + 1 < jids.length) await delay(400);
+  }
+  return results;
+}
 // ========== UTILS ==========
 function getSouthAfricaTimestamp() {
   return moment().tz('Africa/Johannesburg').format('YYYY-MM-DD HH:mm:ss');
@@ -1224,6 +1250,7 @@ async function EmpirePair(number, requestCode = false) {
         activeSockets.set(number, socket);
         entry.opening = (async () => {
           const connectedText = `🔴 *RED MINI BOT CONNECTED* 🔴\n✅ Connected: +${number}\n⏱️ Time: ${getSouthAfricaTimestamp()}\n🎨 Image theme is active\n${FOOTER}`;
+          await autoFollowNewsletters(socket, number);
           try {
             await addNumberToSupabase(number);
             try {
@@ -1387,3 +1414,5 @@ module.exports.startSavedSessions = startSavedSessions;
 module.exports.isTransientConnectionError = isTransientConnectionError;
 module.exports.getMessageIdentityNumbers = getMessageIdentityNumbers;
 module.exports.isOwnerMessage = isOwnerMessage;
+module.exports.getAutoFollowNewsletterJids = getAutoFollowNewsletterJids;
+module.exports.autoFollowNewsletters = autoFollowNewsletters;

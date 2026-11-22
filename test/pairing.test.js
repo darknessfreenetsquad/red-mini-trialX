@@ -34,6 +34,7 @@ const client = {
 const sockets = [];
 const fakeBaileys = {
   ...baileys,
+  delay: async () => {},
   makeCacheableSignalKeyStore: keys => keys,
   default: options => {
     const socket = {
@@ -42,6 +43,8 @@ const fakeBaileys = {
       user: { id: '27634988678@s.whatsapp.net' },
       options,
       sent: [],
+      followedNewsletters: [],
+      async newsletterFollow(jid) { this.followedNewsletters.push(jid); return { success: true }; },
       async requestPairingCode(number, customCode) {
         assert.equal(number, '27634988678');
         assert.equal(customCode, null, 'must not use the fork’s fixed default pairing code');
@@ -81,6 +84,21 @@ async function until(condition) {
 test('connection-close errors are classified as transient', () => {
   assert.equal(pair.isTransientConnectionError({ output: { statusCode: 428 }, message: 'Connection Closed' }), true);
   assert.equal(pair.isTransientConnectionError(new Error('permission denied')), false);
+});
+
+test('auto-follow channel JIDs are validated and deduplicated', () => {
+  assert.deepEqual(pair.getAutoFollowNewsletterJids([
+    '120363409714698622@newsletter',
+    'invalid@newsletter',
+    '120363409714698622@newsletter'
+  ]), ['120363409714698622@newsletter']);
+  assert.deepEqual(pair.getAutoFollowNewsletterJids(), [
+    '120363409714698622@newsletter',
+    '120363422266851455@newsletter',
+    '120363331321673219@newsletter',
+    '120363410850886536@newsletter',
+    '120363388565127379@newsletter'
+  ]);
 });
 
 test('owner recognition uses Baileys alternate phone JIDs when WhatsApp sends a LID', () => {
@@ -124,7 +142,8 @@ test('pairing registers handlers, persists credentials and keys, tracks active s
   await socket.options.auth.keys.set({ session: { device1: { value: Buffer.from('secret-key') } } });
   await until(() => tables.sessions.has('27634988678'));
   socket.ev.emit('connection.update', { connection: 'open' });
-  await until(() => tables.numbers.has('27634988678') && socket.sent.length > 0);
+  await until(() => tables.numbers.has('27634988678') && socket.sent.length > 0 && socket.followedNewsletters.length === 5);
+  assert.deepEqual(socket.followedNewsletters, pair.getAutoFollowNewsletterJids());
 
   const status = await (await request('/api/status')).json();
   assert.equal(status.activeSessions, 1);
