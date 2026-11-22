@@ -7,6 +7,7 @@ const games = require('../plugins/games');
 const social = require('../plugins/social-downloaders');
 const universal = require('../plugins/download');
 const omega = require('../plugins/omega');
+const omegamus = require('../plugins/omegamus');
 const configuredApi = require('../lib/configured-api');
 const config = require('../config');
 const { loadPlugins } = require('../plugin-loader');
@@ -30,7 +31,7 @@ function ctx(command, args = []) {
 
 test('plugin loader exposes migrated non-menu commands', () => {
   const registry = loadPlugins();
-  for (const command of ['play', 'music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'ytdl', 'ytvideo', 'ytaudio', 'kick', 'kickall', 'tgstickers', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'update', 'statusview', 'download', 'movie', 'movies', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'imagetheme', 'setimage']) {
+  for (const command of ['play', 'music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'omegamus', 'omegasearch', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'ytdl', 'ytvideo', 'ytaudio', 'kick', 'kickall', 'tgstickers', 'mute', 'open', 'adddescription', 'addstgroup', 'addstchannel', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'update', 'statusview', 'download', 'movie', 'movies', 'truth', 'dare', 'rps', 'facebook', 'instagram', 'tiktok', 'twitter', 'imagetheme', 'setimage']) {
     assert.ok(registry.has(command), command);
   }
   for (const command of ['video', 'ytmp3', 'ytmp4', 'ytmpdoc', 'yta', 'ytv', 'play3', 'song2']) {
@@ -92,6 +93,26 @@ test('configured API fallback uses config.js base URLs and keys', async () => {
   const fallback = await configuredApi.youtubeAudio('https://youtu.be/configured');
   assert.equal(fallback.provider, 'xteam');
   assert.equal(fallback.url, 'https://cdn.test/configured.mp3');
+});
+
+test('Omegatech music search maps songs and topResult responses', async () => {
+  axios.get = async () => ({
+    status: 200,
+    data: {
+      success: true,
+      data: {
+        songs: [{ videoId: 'song-1', title: 'First Song', artist: 'Artist', url: 'https://youtu.be/song-1' }],
+        topResult: { videoId: 'top-1', title: 'Top Song', subtitles: ['Song', 'Top Artist', '3:20'], url: 'https://youtu.be/top-1' }
+      }
+    }
+  });
+  const songs = await omegamus.searchOmegatechMusic('Top Song');
+  assert.equal(songs.length, 2);
+  assert.equal(songs[0].title, 'Top Song');
+  const result = ctx('omegamus', ['Top', 'Song']);
+  await omegamus.run(result);
+  assert.match(result.socket.sent.at(-1).text, /Top Song/);
+  assert.match(result.socket.sent.at(-1).text, /First Song/);
 });
 
 test('Omegatech commands map search, trending, anime, and YouTube metadata safely', async () => {
