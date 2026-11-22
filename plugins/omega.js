@@ -5,6 +5,7 @@ const { redDragon, cleanFileName } = require('../lib/response-style');
 const { searchYouTube: searchYouTubeWeb } = require('../lib/youtube-search');
 const configuredApi = require('../lib/configured-api');
 const ytdl = require('../lib/ytdl');
+const xcasperMusic = require('../lib/xcasper-music');
 
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
@@ -233,6 +234,10 @@ async function downloadPlayAudio(url) {
   }
 }
 
+async function searchYouTubeMusic(query) {
+  return xcasperMusic.search(query);
+}
+
 async function trendingSongs() {
   return get('/download/audiomack', { action: 'trending', show: 'songs' });
 }
@@ -249,17 +254,29 @@ async function youtubeDownload(url, type = 'video') {
   try {
     return await get('/download/YouTube', { action: 'download', url, type, bitrate: 128 });
   } catch (error) {
-    const fallback = type === 'audio'
-      ? await configuredApi.youtubeAudio(url)
-      : await configuredApi.youtubeVideo(url);
-    return { title: 'YouTube media', channel: fallback.provider, url, audio: type === 'audio' ? { mp3: { downloadUrl: fallback.url } } : null, videoFormats: type === 'video' ? [{ label: 'fallback', downloadUrl: fallback.url }] : [] };
+    if (type === 'audio') {
+      try {
+        const fallback = await configuredApi.youtubeAudio(url);
+        return { title: 'YouTube media', channel: fallback.provider, url, audio: { mp3: { downloadUrl: fallback.url } }, videoFormats: [] };
+      } catch (configuredError) {
+        return { title: 'YouTube Music audio', channel: 'X CASPER', url, audio: { mp3: { downloadUrl: xcasperMusic.downloadUrl(ytdl.getVideoID(url)) } }, videoFormats: [] };
+      }
+    }
+    try {
+      const fallback = await configuredApi.youtubeVideo(url);
+      return { title: 'YouTube media', channel: fallback.provider, url, audio: null, videoFormats: [{ label: 'fallback', downloadUrl: fallback.url }] };
+    } catch (configuredError) {
+      const fallback = await ytdl.mp4(url, '480p');
+      return { title: fallback.title || 'YouTube video', channel: 'YouTube', url, audio: null, videoFormats: [{ label: '480p fallback', downloadUrl: fallback.download }] };
+    }
   }
 }
 
 module.exports = {
-  commands: ['play', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'ytdl', 'ytvideo', 'ytaudio'],
+  commands: ['play', 'song', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija', 'anime', 'crunchyroll', 'video', 'ytdl', 'ytvideo', 'ytaudio'],
   searchSong,
   searchYouTube,
+  searchYouTubeMusic,
   downloadPlayAudio,
   trendingSongs,
   searchCeenaija,
@@ -273,23 +290,30 @@ module.exports = {
       return;
     }
     try {
-      if (command === 'play') {
+      if (command === 'play' || command === 'song') {
         const query = args.join(' ').trim().slice(0, 300);
         if (!query) {
           await socket.sendMessage(from, { text: redDragon('PLAY', ['What song do you want to download?'], footer) }, { quoted: msg });
           return;
         }
 
-        let search;
+        let musicTrack = null;
+        let video = null;
         try {
-          search = await module.exports.searchYouTube(query);
+          musicTrack = await module.exports.searchYouTubeMusic(query);
         } catch (error) {
-          await socket.sendMessage(from, { text: redDragon('PLAY ERROR', ['YouTube search failed. Please try again later.'], footer) }, { quoted: msg });
-          return;
+          // Fall through to the existing YouTube search and provider chain.
         }
-
-        const video = Array.isArray(search?.videos) ? search.videos[0] : null;
-        if (!video?.url) {
+        if (!musicTrack) {
+          try {
+            const search = await module.exports.searchYouTube(query);
+            video = Array.isArray(search?.videos) ? search.videos[0] : null;
+          } catch (error) {
+            await socket.sendMessage(from, { text: redDragon('PLAY ERROR', ['Song search failed. Please try again later.'], footer) }, { quoted: msg });
+            return;
+          }
+        }
+        if (!musicTrack && !video?.url) {
           await socket.sendMessage(from, { text: redDragon('PLAY SEARCH', ['No songs found!'], footer) }, { quoted: msg });
           return;
         }
@@ -298,7 +322,9 @@ module.exports = {
 
         let result;
         try {
-          result = await module.exports.downloadPlayAudio(video.url);
+          result = musicTrack
+            ? { title: musicTrack.title, downloadUrl: musicTrack.downloadUrl }
+            : await module.exports.downloadPlayAudio(video.url);
         } catch (error) {
           const message = error.message === 'Failed to fetch audio from the API. Please try again later.'
             ? error.message
@@ -307,7 +333,7 @@ module.exports = {
           return;
         }
 
-        const title = clean(result.title || video.title, 'red-dragon-play');
+        const title = clean(result.title || musicTrack?.title || video?.title, 'red-dragon-play');
         const fileName = cleanFileName(`${title}.mp3`, 'red-dragon-play.mp3');
         await socket.sendMessage(from, {
           audio: { url: result.downloadUrl },
@@ -344,18 +370,13 @@ module.exports = {
         return;
       }
 
-      if (command === 'ytdl' || command === 'ytvideo' || command === 'ytaudio') {
+      if (command === 'video' || command === 'ytdl' || command === 'ytvideo' || command === 'ytaudio') {
         const url = requireText(args, `.${command} <YouTube URL>`);
         if (!/^https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\//i.test(url)) {
           throw new Error('Use a complete YouTube URL. Search phrases are not supported by this endpoint.');
         }
         const type = command === 'ytaudio' ? 'audio' : 'video';
         const data = await youtubeDownload(url, type);
-        if (command === 'ytdl') {
-          await socket.sendMessage(from, { text: redDragon('YOUTUBE MEDIA', youtubeLines(data), footer) }, { quoted: msg });
-          return;
-        }
-
         if (command === 'ytaudio') {
           const audioUrl = data.audio?.mp3?.downloadUrl || data.audio?.m4a?.downloadUrl;
           if (!audioUrl) throw new Error('No audio format was returned.');

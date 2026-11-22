@@ -1,0 +1,31 @@
+{
+  "_comment": "Import into Pterodactyl Panel: Admin > Nests > Import Egg.",
+  "meta": {
+    "version": "PTDL_v2",
+    "update_url": null
+  },
+  "exported_at": "2026-11-22T00:00:00+00:00",
+  "name": "Red Mini WhatsApp Bot",
+  "author": "darknessfreenetsquad/red-mini-trialX",
+  "description": "Red Mini WhatsApp bot and dashboard. Node dependencies install automatically during server setup.",
+  "features": null,
+  "docker_images": {
+    "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
+  },
+  "file_denylist": [],
+  "startup": "npm start",
+  "config": {
+    "files": "{}",
+    "startup": "{\"done\":\"Red Mini listening on port\"}",
+    "logs": "{}",
+    "stop": "^C"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\nset -e\ncd /mnt/server\nif [ ! -f package-lock.json ]; then echo 'ERROR: package-lock.json is required'; exit 1; fi\nnpm ci --omit=dev\n",
+      "container": "ghcr.io/parkervcp/yolks:nodejs_22",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": []
+}

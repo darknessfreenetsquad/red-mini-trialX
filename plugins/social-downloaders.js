@@ -8,7 +8,7 @@ function firstUrl(...values) {
   for (const value of values.flat(Infinity)) {
     if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
     if (value && typeof value === 'object') {
-      const nested = firstUrl(value.url, value.download, value.downloadUrl, value.directUrl, value.hd, value.video, value.video_hd, value.video_sd);
+      const nested = firstUrl(value.hdplay, value.play, value.url, value.download, value.downloadUrl, value.directUrl, value.hd, value.video, value.video_hd, value.video_sd);
       if (nested) return nested;
     }
   }
@@ -37,7 +37,15 @@ const providers = {
     label: 'Facebook'
   },
   instagram: { aliases: ['instagram', 'ig'], endpoint: 'https://api.siputzx.my.id/api/download/instagram', field: data => firstUrl(data?.result, data?.data, data), type: 'video', label: 'Instagram' },
-  tiktok: { aliases: ['tiktok', 'tt'], endpoint: 'https://api.siputzx.my.id/api/download/tiktok', field: data => firstUrl(data?.result, data?.data, data), type: 'video', label: 'TikTok' },
+  tiktok: {
+    aliases: ['tiktok', 'tt'],
+    endpoints: [
+      { url: 'https://www.tikwm.com/api/', params: input => ({ url: input, hd: 1 }) },
+      { url: 'https://api.siputzx.my.id/api/download/tiktok', params: input => ({ url: input }) }
+    ],
+    field: data => data?.code === 0 ? firstUrl(data?.data?.hdplay, data?.data?.play, data?.data) : firstUrl(data?.result, data?.data, data),
+    type: 'video', label: 'TikTok'
+  },
   twitter: { aliases: ['twitter', 'tw'], endpoint: 'https://api.siputzx.my.id/api/download/twitter', field: data => firstUrl(data?.result, data?.data, data), type: 'video', label: 'Twitter' }
 };
 const aliases = Object.values(providers).flatMap(provider => provider.aliases);

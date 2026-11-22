@@ -26,7 +26,7 @@ const tempCleanupTimer = setInterval(() => {
 tempCleanupTimer.unref();
 
 const app = express();
-const PORT = process.env.PORT || 8002;
+const PORT = process.env.PORT || process.env.SERVER_PORT || 8002;
 const DASHBOARD_ONLY = process.env.RED_DASHBOARD_ONLY === '1';
 const defaultConfig = require('./config');
 const code = require('./pair');
@@ -34,8 +34,8 @@ const { loadPlugins } = require('./plugin-loader');
 const { listImageThemes, getActiveImageTheme } = require('./lib/image-themes');
 
 const COMMAND_GROUPS = [
-    { name: 'Downloaders', icon: '⬇️', commands: ['download', 'movie', 'movies', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw', 'ytdl', 'ytvideo', 'ytaudio'] },
-    { name: 'Music & Audio', icon: '🎵', commands: ['play', 'music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija'] },
+    { name: 'Downloaders', icon: '⬇️', commands: ['download', 'movie', 'movies', 'fb', 'facebook', 'instagram', 'ig', 'tiktok', 'tt', 'twitter', 'tw', 'video', 'ytdl', 'ytvideo', 'ytaudio'] },
+    { name: 'Music & Audio', icon: '🎵', commands: ['play', 'song', 'music', 'audius', 'soundcloud', 'jamendo', 'spotify', 'applemusic', 'songsearch', 'findsong', 'trending', 'audiomacktrending', 'ceenaija'] },
     { name: 'Anime', icon: '🎬', commands: ['anime', 'crunchyroll'] },
     { name: 'Tools', icon: '🔧', commands: ['weather', 'google', 'translate', 'calc', 'short', 'jid', 'sticker', 'pair', 'converctor', 'converter', 'to-url', 'to-doc', 'to-music', 'to-sticker', 'tgstickers', 'update'] },
     { name: 'Fun & Games', icon: '😄', commands: ['truth', 'dare', 'rps'] },
