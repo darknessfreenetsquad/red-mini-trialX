@@ -2,6 +2,7 @@
 
 const axios = require('axios');
 const { redDragon } = require('../lib/response-style');
+const configuredApi = require('../lib/configured-api');
 
 function firstUrl(...values) {
   for (const value of values.flat(Infinity)) {
@@ -75,7 +76,12 @@ module.exports = {
         }
       }
       if (!mediaUrl || !/^https:\/\//i.test(mediaUrl)) {
-        throw lastError || new Error('No downloadable media was returned.');
+        try {
+          const fallback = await configuredApi.social(provider.aliases[0], url);
+          mediaUrl = fallback.url;
+        } catch (fallbackError) {
+          throw lastError || fallbackError || new Error('No downloadable media was returned.');
+        }
       }
       await socket.sendMessage(from, {
         [provider.type]: { url: mediaUrl },

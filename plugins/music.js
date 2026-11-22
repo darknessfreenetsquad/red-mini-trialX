@@ -240,6 +240,21 @@ function getRememberedMedia(token) {
   return entry.item;
 }
 
+async function sendYouTubeFallback(ctx, query, footer) {
+  const { socket, from, msg } = ctx;
+  const omega = require('./omega');
+  const search = await omega.searchYouTube(query);
+  const video = search.videos?.[0];
+  if (!video?.url) throw new Error('No YouTube fallback result was found.');
+  const audio = await omega.downloadPlayAudio(video.url);
+  await socket.sendMessage(from, {
+    audio: { url: audio.downloadUrl },
+    mimetype: 'audio/mpeg',
+    fileName: `${String(audio.title || video.title || 'red-mini-music').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 60) || 'red-mini-music'}.mp3`,
+    caption: redDragon('MUSIC AUDIO', [`Provider: YouTube fallback`, `Title: ${audio.title || video.title || 'Unknown'}`], footer)
+  }, { quoted: msg });
+}
+
 async function sendMediaChoice(ctx, item) {
   const { socket, from, msg } = ctx;
   const buffer = await downloadAudio(item);
@@ -302,10 +317,15 @@ module.exports = {
     try {
       const search = await collectMusicResults(args.join(' '), provider);
       if (!search.items.length) {
-        await socket.sendMessage(from, { text: redDragon('MUSIC SEARCH', [
-          'No result could be found.',
-          ...search.failures.slice(0, 3)
-        ], footer) }, { quoted: msg });
+        try {
+          await sendYouTubeFallback(ctx, args.join(' '), footer);
+        } catch (fallbackError) {
+          await socket.sendMessage(from, { text: redDragon('MUSIC SEARCH', [
+            'No result could be found.',
+            ...search.failures.slice(0, 3),
+            `Fallback: ${fallbackError.message}`
+          ], footer) }, { quoted: msg });
+        }
         return;
       }
 
@@ -322,6 +342,13 @@ module.exports = {
           console.error(`${item.provider} media error:`, mediaError.message);
           search.failures.push(`${item.provider}: media fetch failed`);
         }
+      }
+
+      try {
+        await sendYouTubeFallback(ctx, args.join(' '), footer);
+        return;
+      } catch (fallbackError) {
+        search.failures.push(`YouTube fallback: ${fallbackError.message}`);
       }
 
       const item = linkItem || search.items[0];

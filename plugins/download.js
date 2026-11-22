@@ -2,6 +2,7 @@
 
 const axios = require('axios');
 const { redDragon } = require('../lib/response-style');
+const configuredApi = require('../lib/configured-api');
 
 function findMediaUrl(value) {
   if (typeof value === 'string' && /^https?:\/\//i.test(value)) return value;
@@ -38,8 +39,14 @@ module.exports = {
         timeout: 45000,
         params: { url }
       });
-      const mediaUrl = findMediaUrl(data);
-      if (data?.success === false || !mediaUrl) throw new Error('No downloadable video was returned.');
+      let mediaUrl = findMediaUrl(data);
+      if (data?.success === false || !mediaUrl) {
+        const fallback = await configuredApi.requestConfiguredFallback(
+          ['/api/download/all', '/api/downloader/all', '/api/download'],
+          { url }
+        );
+        mediaUrl = fallback.url;
+      }
       await socket.sendMessage(from, {
         video: { url: mediaUrl },
         caption: redDragon('DOWNLOAD COMPLETE', ['Media sent successfully.'], footer)

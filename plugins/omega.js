@@ -3,6 +3,7 @@
 const axios = require('axios');
 const { redDragon, cleanFileName } = require('../lib/response-style');
 const { searchYouTube: searchYouTubeWeb } = require('../lib/youtube-search');
+const configuredApi = require('../lib/configured-api');
 
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
@@ -214,7 +215,12 @@ async function downloadPlayAudio(url) {
     if (!/^https?:\/\//i.test(downloadUrl || '')) throw new Error('Omegatech returned no audio URL.');
     return { ...data, downloadUrl, title: data.title || 'YouTube audio' };
   } catch (error) {
-    throw new Error(`Audio download failed: ${error.message || lastError?.message || 'provider unavailable'}`);
+    try {
+      const fallback = await configuredApi.youtubeAudio(url);
+      return { title: 'YouTube audio', downloadUrl: fallback.url, fallbackProvider: fallback.provider };
+    } catch (fallbackError) {
+      throw new Error(`Audio download failed: ${error.message || lastError?.message || fallbackError.message || 'provider unavailable'}`);
+    }
   }
 }
 
@@ -231,7 +237,14 @@ async function searchAnime(query) {
 }
 
 async function youtubeDownload(url, type = 'video') {
-  return get('/download/YouTube', { action: 'download', url, type, bitrate: 128 });
+  try {
+    return await get('/download/YouTube', { action: 'download', url, type, bitrate: 128 });
+  } catch (error) {
+    const fallback = type === 'audio'
+      ? await configuredApi.youtubeAudio(url)
+      : await configuredApi.youtubeVideo(url);
+    return { title: 'YouTube media', channel: fallback.provider, url, audio: type === 'audio' ? { mp3: { downloadUrl: fallback.url } } : null, videoFormats: type === 'video' ? [{ label: 'fallback', downloadUrl: fallback.url }] : [] };
+  }
 }
 
 module.exports = {

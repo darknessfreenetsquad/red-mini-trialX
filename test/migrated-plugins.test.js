@@ -7,6 +7,8 @@ const games = require('../plugins/games');
 const social = require('../plugins/social-downloaders');
 const universal = require('../plugins/download');
 const omega = require('../plugins/omega');
+const configuredApi = require('../lib/configured-api');
+const config = require('../config');
 const { loadPlugins } = require('../plugin-loader');
 
 const originalGet = axios.get;
@@ -77,6 +79,19 @@ test('Facebook downloader maps Omegatech data.directUrl responses', async () => 
   const socialCtx = ctx('facebook', ['https://facebook.com/new-format']);
   await social.run(socialCtx);
   assert.equal(socialCtx.socket.sent.at(-1).video.url, 'https://cdn.test/omegatech.mp4');
+});
+
+test('configured API fallback uses config.js base URLs and keys', async () => {
+  axios.get = async (url, options) => {
+    if (url.includes('api.xteam.xyz')) {
+      assert.equal(options.params.apikey, config.APIKeys[config.APIs.xteam]);
+      return { status: 200, data: { data: { downloadUrl: 'https://cdn.test/configured.mp3' } } };
+    }
+    return { status: 404, data: {} };
+  };
+  const fallback = await configuredApi.youtubeAudio('https://youtu.be/configured');
+  assert.equal(fallback.provider, 'xteam');
+  assert.equal(fallback.url, 'https://cdn.test/configured.mp3');
 });
 
 test('Omegatech commands map search, trending, anime, and YouTube metadata safely', async () => {

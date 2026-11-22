@@ -188,6 +188,14 @@ async function sendWithTimeout(socket, jid, message, options, timeoutMs = 8000) 
   }
 }
 
+function withTimeout(promise, timeoutMs, message = 'Operation timed out') {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), timeoutMs); })
+  ]).finally(() => clearTimeout(timer));
+}
+
 async function safeCommandReaction(socket, jid, key, text) {
   try {
     await socket.sendMessage(jid, { react: { text, key } });
@@ -328,7 +336,7 @@ function setupCommandHandlers(socket, sessionNumber) {
       let isBotAdmin = false;
       if (isGroup) {
         try {
-          groupMetadata = await socket.groupMetadata(from);
+          groupMetadata = await withTimeout(socket.groupMetadata(from), 6000, 'Group metadata lookup timed out');
           const numberOf = value => phoneNumberFromJid(value);
           const senderParticipant = groupMetadata.participants?.find(participant =>
             participant.id === sender || participant.jid === sender || numberOf(participant.id) === senderNumber
