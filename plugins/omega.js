@@ -4,6 +4,7 @@ const axios = require('axios');
 const { redDragon, cleanFileName } = require('../lib/response-style');
 const { searchYouTube: searchYouTubeWeb } = require('../lib/youtube-search');
 const configuredApi = require('../lib/configured-api');
+const ytdl = require('../lib/ytdl');
 
 const OMEGA_BASE = process.env.OMEGATECH_API_BASE || 'https://api.omegatech.app/api';
 const REQUEST_TIMEOUT = 15000;
@@ -215,6 +216,14 @@ async function downloadPlayAudio(url) {
     if (!/^https?:\/\//i.test(downloadUrl || '')) throw new Error('Omegatech returned no audio URL.');
     return { ...data, downloadUrl, title: data.title || 'YouTube audio' };
   } catch (error) {
+    try {
+      const legacy = await withTimeout(ytdl.getAudio(url, false), 12000, 'Configured YouTube handlers timed out.');
+      if (legacy?.download && /^https?:\/\//i.test(legacy.download)) {
+        return { ...legacy, downloadUrl: legacy.download, title: legacy.title || 'YouTube audio' };
+      }
+    } catch (legacyError) {
+      lastError = legacyError;
+    }
     try {
       const fallback = await configuredApi.youtubeAudio(url);
       return { title: 'YouTube audio', downloadUrl: fallback.url, fallbackProvider: fallback.provider };

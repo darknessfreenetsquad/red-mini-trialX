@@ -9,6 +9,8 @@ const universal = require('../plugins/download');
 const omega = require('../plugins/omega');
 const omegamus = require('../plugins/omegamus');
 const configuredApi = require('../lib/configured-api');
+const ytdl = require('../lib/ytdl');
+const apiHandlers = require('../lib/api');
 const config = require('../config');
 const { loadPlugins } = require('../plugin-loader');
 
@@ -83,16 +85,35 @@ test('Facebook downloader maps Omegatech data.directUrl responses', async () => 
 });
 
 test('configured API fallback uses config.js base URLs and keys', async () => {
+  const previousOrder = process.env.CONFIG_API_ORDER;
+  process.env.CONFIG_API_ORDER = 'xteam';
   axios.get = async (url, options) => {
     if (url.includes('api.xteam.xyz')) {
-      assert.equal(options.params.apikey, config.APIKeys[config.APIs.xteam]);
+      assert.equal(options.params.apikey, config.APIKeys.xteam || undefined);
       return { status: 200, data: { data: { downloadUrl: 'https://cdn.test/configured.mp3' } } };
     }
     return { status: 404, data: {} };
   };
-  const fallback = await configuredApi.youtubeAudio('https://youtu.be/configured');
-  assert.equal(fallback.provider, 'xteam');
-  assert.equal(fallback.url, 'https://cdn.test/configured.mp3');
+  try {
+    const fallback = await configuredApi.youtubeAudio('https://youtu.be/configured');
+    assert.equal(fallback.provider, 'xteam');
+    assert.equal(fallback.url, 'https://cdn.test/configured.mp3');
+  } finally {
+    if (previousOrder === undefined) delete process.env.CONFIG_API_ORDER;
+    else process.env.CONFIG_API_ORDER = previousOrder;
+  }
+});
+
+test('lib/ytdl audio handlers resolve a playable fallback for play', async () => {
+  const originalKnight = apiHandlers.knightSongDownload;
+  apiHandlers.knightSongDownload = async url => ({ title: 'Configured Handler Song', download: `https://cdn.test/${url.includes('youtu') ? 'handler' : 'wrong'}.mp3` });
+  try {
+    const result = await ytdl.getAudio('https://youtu.be/handler', false);
+    assert.equal(result.title, 'Configured Handler Song');
+    assert.equal(result.download, 'https://cdn.test/handler.mp3');
+  } finally {
+    apiHandlers.knightSongDownload = originalKnight;
+  }
 });
 
 test('Omegatech music search maps songs and topResult responses', async () => {
